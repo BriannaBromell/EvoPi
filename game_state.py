@@ -1,46 +1,51 @@
+# game_state.py
 import pickle
-from game_gc import clean_game_state
+import json
+import os
+from pathlib import Path
 
 def save_game_state(game_data, filename="game_state.pkl"):
-    """Modular save function that accepts a dictionary of game data"""
+    """Save game state with JSON metadata"""
     try:
-        # Clean data before saving
-        cleaned_organisms, cleaned_food = clean_game_state(game_data['organisms'], game_data['food_list'])
+        # Create saved_data directory if needed
+        saved_dir = Path("saved_data")
+        saved_dir.mkdir(exist_ok=True)
         
-        # Prepare full game state
-        full_state = {
-            'organisms': cleaned_organisms,
-            'food_list': cleaned_food,
-            'game_clock': game_data['game_clock'],
-            # Add other game state variables here as needed
-        }
+        # Save JSON metadata with data keys
+        with open(saved_dir / "game_metadata.json", "w") as f:
+            json.dump({"data_keys": list(game_data.keys())}, f)
         
-        with open(filename, 'wb') as file:
-            pickle.dump(full_state, file)
-        print(f"Game state saved to {filename}")
+        # Save pickle data
+        with open(saved_dir / filename, "wb") as f:
+            pickle.dump(game_data, f)
+            
+        print(f"Game state saved to {saved_dir/filename}")
         return True
     except Exception as e:
         print(f"Error saving game state: {e}")
         return False
 
 def load_game_state(filename="game_state.pkl"):
-    """Modular load function that returns game state dictionary"""
+    """Load game state using JSON metadata"""
     try:
-        with open(filename, 'rb') as file:
-            loaded_state = pickle.load(file)
+        saved_dir = Path("saved_data")
         
-        # Clean loaded data
-        organisms, food_list = clean_game_state(loaded_state['organisms'], loaded_state['food_list'])
+        # Load JSON metadata
+        with open(saved_dir / "game_metadata.json", "r") as f:
+            metadata = json.load(f)
+            
+        # Load pickle data
+        with open(saved_dir / filename, "rb") as f:
+            loaded_data = pickle.load(f)
         
-        # Return structured game state
-        return {
-            'organisms': organisms,
-            'food_list': food_list,
-            'game_clock': loaded_state.get('game_clock', 0.0),
-            # Add other game state variables here as needed
-        }
+        # Create complete game state with all expected keys
+        game_state = {}
+        for key in metadata["data_keys"]:
+            game_state[key] = loaded_data.get(key)
+            
+        return game_state
     except FileNotFoundError:
-        print("No saved game state found.")
+        print("No saved game state found")
         return None
     except Exception as e:
         print(f"Error loading game state: {e}")

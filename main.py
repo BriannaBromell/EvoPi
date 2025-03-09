@@ -1,9 +1,22 @@
-import pygame
+#--- Imports (top level) ---
 import math
 import random
 import pickle
 import numpy as np
 import threading
+#--- Imports and/or Installs (external package dependencies) ---
+#Add additional modules by name to ensure_dependencies function call along with pygame and requests
+from import_dependencies import ensure_dependencies 
+try:
+    ensure_dependencies(['pygame', 'requests']) #Expandable dependencies module list
+    import pygame
+    import requests
+    print("All imports succeeded. Game can continue.")
+except ImportError as e:
+    print(f"Critical import error: {e}. Game cannot continue.")
+except Exception as e:
+    print(f"An unexpected error occurred: {e}")
+#--- Imports (Modular, local) ---
 import queue # Import queue for thread-safe communication
 from user_interface import init_ui, draw_leaderboard, draw_organism_info # Game UI
 from game_gc import clean_game_state # garbage collection script
@@ -15,10 +28,12 @@ pygame.init()
 pygame.font.init()
 game_clock = GameClock()
 last_season = 0
-# --- Debug Flag ---
+
+# --- Debug Flag --- draws extra logic visuals 
 debug = True  # Debug mode ON for requested debug feedback
 debug_fov_mode = "arc" # "full", "arc", or "none" - control FOV drawing style
-# --- Display setup ---
+
+# --- Display/Screen setup ---
     # Get Display Information 
 display_info = pygame.display.Info()
 screen_width_full = display_info.current_w
@@ -927,9 +942,10 @@ while running:
             organisms_children.append(eaten_food_item_or_child) # Add child organism to organism list
 
     # Batch update positions
-    Organism.batch_update_positions(organisms_alive)  
+    if organisms_alive:  # Only update positions if there are alive organisms
+        Organism.batch_update_positions(organisms_alive)
 
-    # Draw after position updates
+    # Draw organisms/food after position updates
     for organism in organisms_alive:
         # --- Debug Drawing ---
         if debug:
