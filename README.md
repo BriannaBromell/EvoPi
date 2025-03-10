@@ -12,4 +12,4 @@ Roadmap:<br>
 Species<br>
 Carnivores<br>
 Expanded food mechanisms<br>
-![Screenshot](images/Screenshot 2025-03-10 162546.png)
+![Screenshot 2025-03-10 162546](https://github.com/user-attachments/assets/5c5ba7dd-cb02-4c45-b6f4-479630bdbc30)
