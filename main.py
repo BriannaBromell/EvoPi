@@ -18,7 +18,7 @@ except Exception as e:
     print(f"An unexpected error occurred: {e}")
 #--- Imports (Modular, local) ---
 import queue # Import queue for thread-safe communication
-from user_interface import init_ui, draw_leaderboard, draw_organism_info # Game UI
+from user_interface import init_ui, draw_leaderboard, draw_organism_info, ToggleButton # Game UI
 from game_gc import clean_game_state # garbage collection script
 from game_state import save_game_state, load_game_state #save and load functionality - uses data collection function save_current_state
 from game_clock import GameClock #game clock for days and seasons
@@ -45,8 +45,7 @@ screen_height = screen_height_full // 2
 
 # --- OpenGL ---
 # Screen dimensions dynamically set
-screen = pygame.display.set_mode((screen_width, screen_height), pygame.OPENGL | pygame.DOUBLEBUF)  
-display_surface = pygame.Surface((screen_width, screen_height))
+display_surface = pygame.display.set_mode((screen_width, screen_height), pygame.OPENGL | pygame.DOUBLEBUF)  
 # OpenGL Initialization
 from OpenGL.GL import *
 glEnable(GL_TEXTURE_2D)
@@ -70,7 +69,33 @@ info_font = pygame.font.SysFont("Segoe UI Emoji", 16)
 selected_organism = None  # Add this with other game state variables
 init_ui(leaderboard_font, info_font, screen_width, screen_height)
 pygame.display.set_caption("Organism Hunting Simulation")
+# --- Initialize toggle buttons ---
+# Initialize the toggle buttons
+toggle_button_width = 120
+toggle_button_height = 30
+toggle_button_margin = 10
 
+# Button for toggling debug lines
+debug_lines_button = ToggleButton(
+    screen_width - toggle_button_width - toggle_button_margin,
+    screen_height - toggle_button_height - toggle_button_margin,
+    toggle_button_width,
+    toggle_button_height,
+    "Debug Lines",
+    info_font,
+    initial_state=debug  # Initial state matches the debug flag
+)
+
+# Button for toggling FOV drawing (optional)
+fov_button = ToggleButton(
+    screen_width - toggle_button_width - toggle_button_margin,
+    screen_height - 2 * (toggle_button_height + toggle_button_margin),
+    toggle_button_width,
+    toggle_button_height,
+    "FOV",
+    info_font,
+    initial_state=debug_fov_mode != "none"  # Initial state matches the FOV mode
+)
 # Colors
 white = (255, 255, 255)
 black = (0, 0, 0)
@@ -81,7 +106,7 @@ blue = (0, 0, 255)
 yellow = (255, 255, 0)
 orange = (255, 165, 0)  
 mate_seeking_color = red
-light_grey = (100, 100, 100, 30) # Define light grey for FOV outline, with alpha for transparency
+light_grey = (100, 100, 100, 50) # Define light grey for FOV outline, with alpha for transparency
 
 # --- Game Parameters ---
 num_organisms = 20  # Increased organism count as requested
@@ -91,6 +116,7 @@ clump_radius = 30
 num_food = num_food_clumps * food_per_clump
 food_size = 5
 organism_size = 10
+base_organism_size = 8
 ray_length = 120
 ray_fov = 120
 num_rays = 3
@@ -104,9 +130,9 @@ density_threshold_for_slow_growth = num_food * 0.5
 slow_growth_factor = 0.2
 
 # --- Incremental Food Generation Parameters ---
-base_food_generation_interval = 0.5  # Seconds per particle at low density
-food_density_speedup_factor = 0.1  # Reduction in interval per food item over threshold - adjust for speed
-max_food_density_for_speedup = num_food * 0.5  # Density above which speedup starts
+base_food_generation_interval = 0.25  # Seconds per particle at low density
+food_density_speedup_factor = 1.0  # Reduction in interval per food item over threshold - adjust for speed
+max_food_density_for_speedup = num_food * 0.15  # Density above which speedup starts
 
 # --- Seasonal Food Respawn Parameters ---
 seasonal_respawn_interval = 30  # Seconds between seasonal respawn attempts
@@ -221,7 +247,11 @@ class Organism:
         self.targeted_food = None # Initialize targeted_food
         self.current_goal = current_goal if current_goal is not None else "food"
         self.base_color = base_color if base_color is not None else self.calculate_color_from_attributes() # Call color function here
-        self.organism_size = organism_size if organism_size is not None else random.uniform(8, 15)
+        # Use a different parameter name (organism_size)
+        if organism_size is not None:
+            self.organism_size = organism_size  # Use the passed parameter
+        else:
+            self.organism_size = base_organism_size  # Use the global variable
         
         self.lifespan = lifespan if lifespan is not None else random.uniform(60 * 1, 60 * 2) # default lifespan is 1-2 minutes (60 seconds times low range to 60 seconds times high range)
         self.age = age if age is not None else 0
@@ -385,8 +415,12 @@ class Organism:
 
         # DNA Configuration - Easily expandable
         inheritable_traits = [
-            'strength', 'speed', 'sight_radius',
-            'organism_size', 'lifespan', 'base_color'
+            'strength', 
+            'speed',
+            'sight_radius',
+            'organism_size',
+            'lifespan', 
+            'base_color'
         ]
 
         mutation_config = {
@@ -467,8 +501,12 @@ class Organism:
 
         # DNA Configuration - Easily expandable
         inheritable_traits = [
-            'strength', 'speed', 'sight_radius', 
-            'organism_size', 'lifespan', 'base_color'
+            'strength',
+            'speed', 
+            'sight_radius', 
+            'organism_size', 
+            'lifespan', 
+            'base_color'
         ]
         
         mutation_config = {
@@ -476,7 +514,7 @@ class Organism:
             'strength': (0.15, 0.5, 3.0, 0.2),
             'speed': (0.15, 0.5, 2.5, 0.15),
             'sight_radius': (0.1, 50, 200, 0.1),
-            'organism_size': (0.1, 5, 20, 0.15),
+            'organism_size': (0.1, 4, 20, 0.05),
             'lifespan': (0.1, 60, 600, 0.1),
             'base_color': (0.05, None, None, 20)  # Color mutation in RGB space
         }
@@ -631,27 +669,30 @@ class Organism:
     def eat_food(self, food):
         """Organism eats food and gains energy."""
         self.energy += 50
-        # if self.energy > 500:
-        # self.energy = 500
+
 
     def draw(self, surface):
         """Draw the organism and debug rays - Optimized Version."""
         # --- 1. Draw Base Organism (Circle) ---
-        pygame.draw.circle(surface, self.base_color, (int(self.position[0]), int(self.position[1])), organism_size)
+        pygame.draw.circle(surface, self.base_color, (int(self.position[0]), int(self.position[1])), int(self.organism_size))
 
-        # --- 2. Mate Seeking Indicator ---
+        # --- 2. Draw White Ring if Selected ---
+        if selected_organism == self:
+            pygame.draw.circle(surface, white, (int(self.position[0]), int(self.position[1])), int(self.organism_size) + 5, 2)  # White ring around selected organism
+
+        # --- 3. Mate Seeking Indicator ---
         if self.current_goal == "mate_seeking":
-            pygame.draw.circle(surface, red, (int(self.position[0]), int(self.position[1])), organism_size + 3, 2)
+            pygame.draw.circle(surface, yellow, (int(self.position[0]), int(self.position[1])), int(self.organism_size) + 3, 2)
 
-        # --- 3. Direction Indicator and Eyes ---
-        # --- 3.1. Calculate Head Position (Direction Indicator End) ---
-        head_x = self.position[0] + math.cos(math.radians(self.direction)) * organism_size
-        head_y = self.position[1] - math.sin(math.radians(self.direction)) * organism_size
+        # --- 4. Direction Indicator and Eyes ---
+        # --- 4.1. Calculate Head Position (Direction Indicator End) ---
+        head_x = self.position[0] + math.cos(math.radians(self.direction)) * self.organism_size
+        head_y = self.position[1] - math.sin(math.radians(self.direction)) * self.organism_size
         pygame.draw.line(surface, white, (int(self.position[0]), int(self.position[1])), (int(head_x), int(head_y)), 3)
 
-        # --- 3.2. Calculate Eye Positions (Inward and Closer) ---
-        eye_offset_distance = organism_size / 1.5  # Reduced offset for inward eyes
-        eye_radius = organism_size / 2
+        # --- 4.2. Calculate Eye Positions (Inward and Closer) ---
+        eye_offset_distance = self.organism_size / 1.5  # Reduced offset for inward eyes
+        eye_radius = self.organism_size / 2
         pupil_radius = eye_radius / 2
         pupil_offset_distance = eye_radius / 3
 
@@ -664,7 +705,6 @@ class Organism:
         left_eye_y = self.position[1] - math.sin(left_eye_angle_radians) * eye_offset_distance
         right_eye_x = self.position[0] + math.cos(right_eye_angle_radians) * eye_offset_distance
         right_eye_y = self.position[1] - math.sin(right_eye_angle_radians) * eye_offset_distance
-
         # Pupil offset remains relative to direction for 'looking' effect
         pupil_x_offset = math.cos(math.radians(self.direction)) * pupil_offset_distance
         pupil_y_offset = -math.sin(math.radians(self.direction)) * pupil_offset_distance
@@ -682,19 +722,20 @@ class Organism:
         pygame.draw.circle(surface, pupil_color, (int(right_pupil_x), int(right_pupil_y)), int(pupil_radius))  # Right Pupil
 
 
-        # --- 4. Name Display ---
+        # --- 5. Name Display ---
         name_surface = name_font.render(self.name, True, white)
-        name_rect = name_surface.get_rect(center=(int(self.position[0]), int(self.position[1] - organism_size - 30)))
+        name_rect = name_surface.get_rect(center=(int(self.position[0]), int(self.position[1] - self.organism_size - 30)))
         surface.blit(name_surface, name_rect)
 
-        # --- 5. Energy and Age Display ---
+        # --- 6. Energy and Age Display ---
         energy_age_text = f"⚡{int(self.energy)}|⌛{int(self.age)}/{int(self.lifespan)}"
         energy_age_surface = name_font.render(energy_age_text, True, white)
-        energy_age_rect = energy_age_surface.get_rect(center=(int(self.position[0]), int(self.position[1] - organism_size - 10)))
+        energy_age_rect = energy_age_surface.get_rect(center=(int(self.position[0]), int(self.position[1] - self.organism_size - 10)))
         surface.blit(energy_age_surface, energy_age_rect)
 
-        # --- 6. Debug FOV Drawing (Optimized) ---
-        if debug and debug_fov_mode != "none":
+        # Organism class (inside the draw method)
+        # --- 7. Debug FOV Drawing (Optimized) ---
+        if debug and debug_fov_mode != "none" and fov_button.state:  # Only draw FOV if the FOV button is active
             start_angle_deg = self.direction - ray_fov / 2
             end_angle_deg = self.direction + ray_fov / 2
             start_ray_rad = math.radians(start_angle_deg) # Calculate radians once
@@ -721,10 +762,9 @@ class Organism:
 
             elif debug_fov_mode == "arc": # Draw only the FOV arc
                 pygame.draw.lines(surface, light_grey, False, fov_arc_points, 1) # Draw FOV arc (reusing calculated points)
-
-
-        # --- 7. Debug Rays Drawing ---
-        if debug: # Draw debug rays
+        # Organism class (inside the draw method)
+        # --- 8. Debug Rays Drawing ---
+        if debug_lines_button.state:  # Only draw debug rays if the debug lines button is active
             # Draw rays to detected food (green)
             detected_food_list = self.ray_cast_results.get('food_list', [])
             for food_info in detected_food_list:
@@ -735,8 +775,7 @@ class Organism:
             detected_mate_list = self.ray_cast_results.get('mate_list', [])
             for mate_info in detected_mate_list:
                 mate = mate_info['mate']
-                pygame.draw.line(surface, yellow, (int(self.position[0]), int(self.position[1])), (int(mate.position[0]), int(mate.position[1])), 1)
-
+                pygame.draw.line(surface, yellow, (int(self.position[0]), int(self.position[1])), (int(mate.position[0]), int(mate.position[1])), 1)    
     def __getstate__(self):
         """Return state values to be pickled - convert NumPy arrays to lists."""
         state = {
@@ -784,14 +823,14 @@ class Organism:
         self.position = np.array(state.get('position', [random.uniform(0, screen_width), random.uniform(0, screen_height)]), dtype=float)
         self.direction = state.get('direction', random.uniform(0, 360))
         self.strength = state.get('strength', random.uniform(1, 3))
-        self.speed = state.get('speed', random.uniform(1, 2))
+        self.speed = state.get('speed', random.uniform(1, 1.15))
         self.sight_radius = state.get('sight_radius', ray_length)
         self.energy = state.get('energy', 100)
         self.generation_number = state.get('generation_number', 1)
         self.name = state.get('name', self.generate_name())
         self.current_goal = state.get('current_goal', "food")
         self.base_color = state.get('base_color', self.calculate_color_from_attributes()) # Default to attribute-based color if not in state
-        self.organism_size = state.get('organism_size', 8)
+        self.organism_size = state.get('organism_size', organism_size)  # Use the global organism_size
         self.lifespan = state.get('lifespan', random.uniform(60 * 2, 60 * 5))
         self.age = state.get('age', 0)
         self.last_direction_change_time = state.get('last_direction_change_time', pygame.time.get_ticks())  # Load wander timer state, default to current time
@@ -938,10 +977,18 @@ while running:
                 # Organism selection (checking clicks)
                 for org in organisms:
                     distance = math.hypot(org.position[0]-mouse_pos[0], org.position[1]-mouse_pos[1])
-                    if distance < organism_size:
+                    if distance < organism_size * 2:  # Increase the clickable area to 2x the organism size
                         selected_organism = org
                         break
-    #screen.fill(black)
+                # Check if the debug lines button was clicked
+                if debug_lines_button.is_clicked(mouse_pos):
+                    debug_lines_button.toggle()
+                    debug = debug_lines_button.state  # Update the debug flag
+                # Check if the FOV button was clicked
+                if fov_button.is_clicked(mouse_pos):
+                    fov_button.toggle()
+                    debug_fov_mode = "arc" if fov_button.state else "none"  # Update the FOV mode
+
     display_surface.fill(black)  # Instead of screen.fill(black)
 
     # --- Food Update and Drawing ---
@@ -1006,24 +1053,25 @@ while running:
             if debug:
                 print(f"Season {current_season} began - respawned {len(new_food)} food")
         last_season = current_season
-
-    # --- Leaderboard ---
-        # --- Season/day display & top 3 creatures (leaderboard) ---     
+    # --- User Interface (UI)---
+    # Draw the toggle buttons
+    debug_lines_button.draw(display_surface)
+    fov_button.draw(display_surface)
+    #  Leaderboard 
+        #  Season/day display & top 3 creatures (leaderboard) ---     
     draw_leaderboard(display_surface, organisms, current_season, current_day)
     if selected_organism:
         draw_organism_info(display_surface, selected_organism)
 
 
-
+# --- OpenGL ---
     # Convert Pygame Surface to OpenGL texture
     texture_data = pygame.image.tostring(display_surface, "RGBA", True)
     glBindTexture(GL_TEXTURE_2D, texture)
     glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, screen_width, screen_height, GL_RGBA, GL_UNSIGNED_BYTE, texture_data)
-
     # Clear and draw texture
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
     glLoadIdentity()
-# --- OpenGL ---
     # With this (flip texture vertically):
     glBegin(GL_QUADS)
     glTexCoord2f(0, 1)  # Changed from (0,0)

@@ -70,3 +70,27 @@ def draw_organism_info(surface, organism):
 
     # Position panel
     surface.blit(panel, (SCREEN_WIDTH - panel_width - 10, 10))
+
+class ToggleButton:
+    def __init__(self, x, y, width, height, text, font, initial_state=False):
+        self.rect = pygame.Rect(x, y, width, height)
+        self.text = text
+        self.font = font
+        self.state = initial_state
+        self.color = (100, 100, 100)  # Grey color for the button
+        self.text_color = (255, 255, 255)  # White color for the text
+
+    def draw(self, surface):
+        # Draw the button rectangle
+        pygame.draw.rect(surface, self.color, self.rect)
+        # Draw the button text
+        text_surface = self.font.render(self.text, True, self.text_color)
+        text_rect = text_surface.get_rect(center=self.rect.center)
+        surface.blit(text_surface, text_rect)
+
+    def is_clicked(self, mouse_pos):
+        return self.rect.collidepoint(mouse_pos)
+
+    def toggle(self):
+        self.state = not self.state
+        self.color = (0, 255, 0) if self.state else (100, 100, 100)  # Green when active, grey when inactive
