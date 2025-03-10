@@ -8,7 +8,7 @@ import threading
 #Add additional modules by name to ensure_dependencies function call along with pygame and requests
 from import_dependencies import ensure_dependencies 
 try:
-    ensure_dependencies(['pygame', 'requests']) #Expandable dependencies module list
+    ensure_dependencies(['pygame', 'requests', 'OpenGL']) #Expandable dependencies module list
     import pygame
     import requests
     print("All imports succeeded. Game can continue.")
@@ -41,8 +41,27 @@ screen_height_full = display_info.current_h
     # Calculate Window Dimensions (1/2 of display) ---
 screen_width = screen_width_full // 2
 screen_height = screen_height_full // 2
-    # Screen dimensions (now dynamically set)
-screen = pygame.display.set_mode((screen_width, screen_height))
+  
+
+# --- OpenGL ---
+# Screen dimensions dynamically set
+screen = pygame.display.set_mode((screen_width, screen_height), pygame.OPENGL | pygame.DOUBLEBUF)  
+display_surface = pygame.Surface((screen_width, screen_height))
+# OpenGL Initialization
+from OpenGL.GL import *
+glEnable(GL_TEXTURE_2D)
+glViewport(0, 0, screen_width, screen_height)
+glMatrixMode(GL_PROJECTION)
+glLoadIdentity()
+glOrtho(0, screen_width, screen_height, 0, -1, 1)
+glMatrixMode(GL_MODELVIEW)
+glLoadIdentity()
+# Create OpenGL texture
+texture = glGenTextures(1)
+glBindTexture(GL_TEXTURE_2D, texture)
+glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
+glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
+glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, screen_width, screen_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, None)
 
 # --- Font & UI Setup --- UI must come after screen initialization
 name_font = pygame.font.SysFont("Segoe UI Emoji", 18)
@@ -66,7 +85,7 @@ light_grey = (100, 100, 100, 30) # Define light grey for FOV outline, with alpha
 
 # --- Game Parameters ---
 num_organisms = 20  # Increased organism count as requested
-num_food_clumps = 15
+num_food_clumps = 25
 food_per_clump = 8
 clump_radius = 30
 num_food = num_food_clumps * food_per_clump
@@ -112,40 +131,65 @@ def normalize_angle(angle):
 
 
 # --- Food Class ---
-
 class Food:
-    def __init__(self, position, shape_matrix=None): # Added shape_matrix as argument with default None
-        self.position = np.array(position, dtype=float)  # Store position as NumPy array
-        if shape_matrix is None: # Check if shape_matrix is provided, if not, use default
-            self.shape_matrix = np.array([ # Default clover shape matrix
+    # Class-level cache for shared surfaces (key: hash of shape_matrix tuple)
+    shape_cache = {}
+
+    def __init__(self, position, shape_matrix=None):
+        self.position = np.array(position, dtype=float)
+        
+        # Set shape_matrix (use default if None)
+        if shape_matrix is None:
+            self.shape_matrix = np.array([
                 [0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0],
                 [0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 1, 1, 2, 1, 1, 0, 0, 0, 0, 0], # Center brown dot (stem)
+                [0, 0, 0, 0, 0, 1, 1, 2, 1, 1, 0, 0, 0, 0, 0],
                 [0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0],
                 [0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0]
-            ]) # Define your shape matrix here
+            ])
         else:
-            self.shape_matrix = np.array(shape_matrix) # Use provided shape_matrix
-    def draw(self, surface):
+            self.shape_matrix = np.array(shape_matrix)
+        
+        # Check cache for existing surface
+        shape_hash = hash(tuple(map(tuple, self.shape_matrix)))  # Hash the matrix
+        if shape_hash not in Food.shape_cache:
+            # Generate and cache new surface
+            Food.shape_cache[shape_hash] = self._create_cached_surface()
+        self.cached_surface = Food.shape_cache[shape_hash]
+
+    def _create_cached_surface(self):
+        """Internal method to generate a surface for the shape_matrix."""
         matrix_height, matrix_width = self.shape_matrix.shape
-        cell_size = food_size * 0.95# Adjusted cell size for better spacing
-        for row_index in range(matrix_height):
-            for col_index in range(matrix_width):
-                cell_value = self.shape_matrix[row_index, col_index]
-                draw_x = int(self.position[0] + (col_index - matrix_width // 2) * cell_size)
-                draw_y = int(self.position[1] + (row_index - matrix_height // 2) * cell_size)
-
+        cell_size = int(food_size * 0.95)
+        
+        surf_width = matrix_width * cell_size
+        surf_height = matrix_height * cell_size
+        surface = pygame.Surface((surf_width, surf_height), pygame.SRCALPHA)
+        
+        # Draw the shape
+        for row in range(matrix_height):
+            for col in range(matrix_width):
+                cell_value = self.shape_matrix[row, col]
+                if cell_value == 0:
+                    continue
+                x = col * cell_size
+                y = row * cell_size
                 if cell_value == 1:
-                    pygame.draw.circle(surface, green, (draw_x, draw_y), food_size * 0.5)
+                    pygame.draw.circle(surface, green, (x, y), int(food_size * 0.5))
                 elif cell_value == 2:
-                    pygame.draw.circle(surface, brown, (draw_x, draw_y), int(food_size * 0.8)) # Slightly bigger brown dot
+                    pygame.draw.circle(surface, brown, (x, y), int(food_size * 0.8))
+        return surface
 
-
+    @staticmethod
+    def draw_all(food_list, surface):
+        """Batch draw all food items in a single pass."""
+        for food in food_list:
+            rect = food.cached_surface.get_rect(center=(int(food.position[0]), int(food.position[1])))
+            surface.blit(food.cached_surface, rect.topleft)
     def __getstate__(self):
         """Return state values to be pickled."""
         return {'position': self.position.tolist(),
                 'shape_matrix': self.shape_matrix.tolist()} # Save shape_matrix to state
-
     def __setstate__(self, state):
         """Restore state from pickled values."""
         self.position = np.array(state.get('position', [0, 0]), dtype=float)
@@ -160,7 +204,7 @@ class Food:
                 [0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0],
                 [0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0]
             ])
-
+        self.cached_surface = self.create_cached_surface() 
 
 
 # --- Organism Class ---
@@ -350,7 +394,7 @@ class Organism:
             'strength': (0.15, 0.5, 3.0, 0.2),
             'speed': (0.15, 0.5, 2.5, 0.15),
             'sight_radius': (0.1, 50, 200, 0.1),
-            'organism_size': (0.1, 5, 20, 0.15),
+            'organism_size': (0.1, 1, 50, 0.15),
             'lifespan': (0.1, 60, 600, 0.1),
             'base_color': (0.05, None, None, 20)  # Color mutation in RGB space
         }
@@ -804,22 +848,6 @@ def incremental_food_generation(food_list):
         food_generation_timer = food_generation_interval
 
 
-def seasonal_food_respawn(food_list):
-    """Handles seasonal respawn of food clumps with a chance."""
-    global seasonal_timer
-
-    seasonal_timer -= 1/60
-
-    if seasonal_timer <= 0:
-        if random.random() < seasonal_respawn_chance:
-            new_food_clumps = generate_food()
-            food_list.extend(new_food_clumps)
-            if debug:
-                print(f"Seasonal food respawn triggered! Added {len(new_food_clumps)} new food items in clumps.")
-        else:
-            if debug:
-                print("Seasonal food respawn chance not met this season.")
-        seasonal_timer = seasonal_respawn_interval
 
 def generate_organisms():
     """Generates initial organisms."""
@@ -848,6 +876,7 @@ def save_current_state():
         'game_clock': game_clock.get_state(),
         'last_season': last_season,
         'seasonal_timer': seasonal_timer
+        
     }
     save_game_state(game_data)
 
@@ -892,33 +921,33 @@ while running:
     current_season, current_day = game_clock.get_season_day()
     total_days = game_clock.get_total_days()
 
-
     # --- Garbage Collection ---
     if total_days != last_gc_day:
         organisms, food_list = clean_game_state(organisms, food_list)
         last_gc_day = total_days
 
-
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             save_current_state()
             running = False
+    # --- Mouse click tracking ---
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 mouse_pos = pygame.mouse.get_pos()
                 selected_organism = None
                 
-                # Check organism clicks
+                # Organism selection (checking clicks)
                 for org in organisms:
                     distance = math.hypot(org.position[0]-mouse_pos[0], org.position[1]-mouse_pos[1])
                     if distance < organism_size:
                         selected_organism = org
                         break
-    screen.fill(black)
+    #screen.fill(black)
+    display_surface.fill(black)  # Instead of screen.fill(black)
 
     # --- Food Update and Drawing ---
     incremental_food_generation(food_list)
-    for food in food_list:
-        food.draw(screen)
+    #Food.draw_all(food_list, screen)
+    Food.draw_all(food_list, display_surface) 
 
     # --- Start Ray Casting Thread ---
     ray_casting_thread = threading.Thread(target=ray_casting_thread_function, args=(organisms, food_list, ray_cast_results_queue))
@@ -951,13 +980,13 @@ while running:
         if debug:
             if organism.current_goal == "food" and organism.ray_cast_results.get('food'):
                 closest_food_pos = organism.ray_cast_results['food'].position
-                pygame.draw.line(screen, yellow, (int(organism.position[0]), int(organism.position[1])), (int(closest_food_pos[0]), int(closest_food_pos[1])), 2)
+                pygame.draw.line(display_surface, yellow, (int(organism.position[0]), int(organism.position[1])), (int(closest_food_pos[0]), int(closest_food_pos[1])), 2)
             if organism.current_goal == "mate_seeking" and organism.ray_cast_results.get('mate'):
                 closest_mate_pos = organism.ray_cast_results['mate'].position
-                pygame.draw.line(screen, red, (int(organism.position[0]), int(organism.position[1])), (int(closest_mate_pos[0]), int(closest_mate_pos[1])), 2)
-            organism.draw(screen) # Draw organism and FOV (in debug mode)
+                pygame.draw.line(display_surface, red, (int(organism.position[0]), int(organism.position[1])), (int(closest_mate_pos[0]), int(closest_mate_pos[1])), 2)
+            organism.draw(display_surface) # Draw organism and FOV (in debug mode)
         else:
-            organism.draw(screen) # Draw organism (no FOV)
+            organism.draw(display_surface) # Draw organism (no FOV)
 
     # --- Process Food Consumption ---
     for eaten_food in food_to_remove_frame:
@@ -969,7 +998,6 @@ while running:
     # --- Update Organism List ---
     organisms = organisms_alive #Update to only living organisms
 
-
     # --- Seasonal Food Respawn  ---
     if current_season != last_season:
         if random.random() < seasonal_respawn_chance:
@@ -979,14 +1007,35 @@ while running:
                 print(f"Season {current_season} began - respawned {len(new_food)} food")
         last_season = current_season
 
-    #seasonal_food_respawn(food_list)
     # --- Leaderboard ---
-        # --- Season/Day Display (leaderboard) ---
-
-        # --- Leading top3 creatures (leaderboard) ---     
-    draw_leaderboard(screen, organisms, current_season, current_day)
+        # --- Season/day display & top 3 creatures (leaderboard) ---     
+    draw_leaderboard(display_surface, organisms, current_season, current_day)
     if selected_organism:
-        draw_organism_info(screen, selected_organism)
+        draw_organism_info(display_surface, selected_organism)
+
+
+
+    # Convert Pygame Surface to OpenGL texture
+    texture_data = pygame.image.tostring(display_surface, "RGBA", True)
+    glBindTexture(GL_TEXTURE_2D, texture)
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, screen_width, screen_height, GL_RGBA, GL_UNSIGNED_BYTE, texture_data)
+
+    # Clear and draw texture
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+    glLoadIdentity()
+# --- OpenGL ---
+    # With this (flip texture vertically):
+    glBegin(GL_QUADS)
+    glTexCoord2f(0, 1)  # Changed from (0,0)
+    glVertex2f(0, 0)
+    glTexCoord2f(1, 1)  # Changed from (1,0)
+    glVertex2f(screen_width, 0)
+    glTexCoord2f(1, 0)  # Changed from (1,1)
+    glVertex2f(screen_width, screen_height)
+    glTexCoord2f(0, 0)  # Changed from (0,1)
+    glVertex2f(0, screen_height)
+    glEnd()
+
     pygame.display.flip()
 
 pygame.quit()
