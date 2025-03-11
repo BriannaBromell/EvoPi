@@ -212,27 +212,30 @@ class Food:
         for food in food_list:
             rect = food.cached_surface.get_rect(center=(int(food.position[0]), int(food.position[1])))
             surface.blit(food.cached_surface, rect.topleft)
+
     def __getstate__(self):
         """Return state values to be pickled."""
-        return {'position': self.position.tolist(),
-                'shape_matrix': self.shape_matrix.tolist()} # Save shape_matrix to state
+        return {
+            'position': self.position.tolist(),
+            'shape_matrix': self.shape_matrix.tolist()
+        }
+
     def __setstate__(self, state):
         """Restore state from pickled values."""
         self.position = np.array(state.get('position', [0, 0]), dtype=float)
-        shape_matrix_list = state.get('shape_matrix') # Get shape_matrix from state
-        if shape_matrix_list is not None: # Check if shape_matrix was in saved state
-            self.shape_matrix = np.array(shape_matrix_list) # Restore shape_matrix
-        else: # If no shape_matrix in state, use default (for older saves or new Food objects without shape)
+        shape_matrix_list = state.get('shape_matrix')
+        if shape_matrix_list is not None:
+            self.shape_matrix = np.array(shape_matrix_list)
+        else:
             self.shape_matrix = np.array([
                 [0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0],
                 [0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 1, 1, 2, 1, 1, 0, 0, 0, 0, 0], # Center brown dot (stem)
+                [0, 0, 0, 0, 0, 1, 1, 2, 1, 1, 0, 0, 0, 0, 0],
                 [0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0],
                 [0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0]
             ])
-        self.cached_surface = self.create_cached_surface() 
-
-
+        # Use the correct method name here
+        self.cached_surface = self._create_cached_surface()
 # --- Organism Class ---
 class Organism:
     def __init__(self, position, generation_number=1, direction=None, strength=None, speed=None, sight_radius=None, energy=None, name=None, current_goal=None, base_color=None, organism_size=None, lifespan=None, age=None):
@@ -385,14 +388,29 @@ class Organism:
             self.move_forward()
 
     def move_forward(self):
-        """Move organism forward based on speed."""
+        """Move organism forward based on speed and adjust energy expenditure based on size and speed."""
+        # Baseline energy expenditure for size 10 and speed 1
+        baseline_size = base_organism_size
+        baseline_speed = 1
+        baseline_energy_cost = 0.1  # Baseline energy cost per frame
+
+        # Calculate energy expenditure based on size and speed
+        size_factor = self.organism_size / baseline_size
+        speed_factor = self.speed / baseline_speed
+
+        # Adjust energy expenditure based on size and speed
+        energy_cost = baseline_energy_cost * size_factor * speed_factor
+
+        # Move the organism
         radians = math.radians(self.direction)
         dx = math.cos(radians) * self.speed
         dy = -math.sin(radians) * self.speed
         self.position += np.array([dx, dy])
         self.position[0] %= screen_width  # Wrap around screen using NumPy modulo
         self.position[1] %= screen_height
-        self.energy -= 0.1
+
+        # Deduct energy based on the calculated energy cost
+        self.energy -= energy_cost
 
     def mate(self, other_parent):
         """Sexual reproduction with another organism using enhanced DNA evolution"""
