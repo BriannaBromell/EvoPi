@@ -4,6 +4,8 @@ import random
 import pickle
 import numpy as np
 import threading
+from pathlib import Path
+import json
 #--- Imports and/or Installs (external package dependencies) ---
 #Add additional modules by name to ensure_dependencies function call along with pygame and requests
 from import_dependencies import ensure_dependencies 
@@ -282,11 +284,58 @@ class Organism:
         for i, org in enumerate(organisms):
             org.position = new_positions[i]
             org.energy -= 0.1
+#--- Organis Naming conventions ---
     def generate_name(self):
+        """Generates a pronounceable name with capitalization and single hyphen."""
+        syllables = self._load_syllables()
+        num_syllables = random.randint(4, 5)  # 4 or 5 syllables
+
+        name_parts = [random.choice(syllables) for _ in range(num_syllables)]
+
+        # Capitalize the first syllable
+        name_parts[0] = name_parts[0].capitalize()
+
+        # Intuitively capitalize another syllable (language theory inspired)
+        if num_syllables > 2:
+            # Capitalize a syllable roughly in the middle or toward the end
+            capitalize_index = random.randint(num_syllables // 2, num_syllables - 2)
+            name_parts[capitalize_index] = name_parts[capitalize_index].capitalize()
+
+            # Join the syllables with a single hyphen before the second capitalized part
+            first_part = "".join(name_parts[:capitalize_index])
+            second_part = "".join(name_parts[capitalize_index:])
+            return f"{first_part}-{second_part}-({self.generation_number})"
+        else:
+            # If no second capitalization, join all syllables without hyphens
+            return "".join(name_parts) + f"-({self.generation_number})"
+
+    def _load_syllables(self):
+        """Loads syllables from config/syllables.json, creates if needed."""
+        config_dir = Path("config")
+        syllables_path = config_dir / "syllables.json"
+
+        try:
+            # Create config directory if needed
+            config_dir.mkdir(exist_ok=True)
+
+            # Create syllables.json if it doesn't exist
+            if not syllables_path.exists():
+                with open(syllables_path, "w") as f:
+                    json.dump({"syllables": ["kra", "mor", "fin", "thor", "ly", "dra", "gla", "vis", "nox", "zen", "pyr", "thos", "rel", "vyn", "zyl", "quor", "myr", "jex", "fex", "wix", "lox", "rex", "vex", "zax", "plox", "trix", "blor", "grak", "zind", "vorth", "quil", "mord", "flax", "nix", "quiv", "jolt"]}, f, indent=4) #add more syllables here
+
+            with open(syllables_path, "r") as f:
+                data = json.load(f)
+                return data["syllables"]
+
+        except (FileNotFoundError, json.JSONDecodeError, OSError) as e: #add os error to catch permission errors.
+            print(f"Error loading/creating syllables: {e}. Using default syllables.")
+            return ["kra", "mor", "fin", "thor", "ly", "dra", "gla", "vis", "nox", "zen", "pyr", "thos", "rel", "vyn", "zyl", "quor", "myr", "jex", "fex", "wix", "lox", "rex", "vex", "zax", "plox", "trix"]  # Default syllables
+
+    '''def generate_name(self):
         """Generates a name using prefix, suffix and generation number."""
         prefix = random.choice(name_prefixes)
         suffix = random.choice(name_suffixes)
-        return f"{prefix}{suffix}-{random.randint(1000, 9999)}-({self.generation_number})"
+        return f"{prefix}{suffix}-{random.randint(1000, 9999)}-({self.generation_number})"'''
     def cast_rays_for_food_threaded(self, food_list, organism_data):
         """Casts rays to detect food within FOV and range and returns all in FOV with distances."""
         organism_pos = organism_data['position']
@@ -443,11 +492,11 @@ class Organism:
 
         mutation_config = {
             # Format: trait: (mutation_rate, min_value, max_value, mutation_strength)
-            'strength': (0.15, 0.5, 3.0, 0.2),
-            'speed': (0.15, 0.5, 2.5, 0.15),
-            'sight_radius': (0.1, 50, 200, 0.1),
-            'organism_size': (0.1, 1, 50, 0.15),
-            'lifespan': (0.1, 60, 600, 0.1),
+            'strength': (0.15, 0.5, 5.0, 0.2),
+            'speed': (0.15, 0.5, 5.5, 0.15),
+            'sight_radius': (0.1, 50, 1000, 0.1),
+            'organism_size': (0.1, 1, 100, 0.15),
+            'lifespan': (0.1, 60, 1000, 0.1),
             'base_color': (0.05, None, None, 20)  # Color mutation in RGB space
         }
 
