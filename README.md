@@ -7,7 +7,7 @@ Evolution simulator<br>
     -Prefix/Suffix name generation.<br>
     -Stats are hereditary and include mutation rates.<br>
     -Game persists between sessions unless save file is deleted, progress will not be lost.<br>
-
+    -Strength and Speed affect energy expenditure
 Roadmap:<br>
 Species<br>
 Carnivores<br>
