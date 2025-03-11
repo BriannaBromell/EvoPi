@@ -1,19 +1,21 @@
 # EvoPi
-Evolution simulator<br> 
-  A custom individual-creature focused evolutionary simulor with basic UI. <br>
-    -4 seasons(minutes) separated by 60 days(seconds) as a game clock<br>
-    -Food blooms seasonally and sprinkles daily<br>
-    -Selectable creatures for view info purposes.<br>
-    -Syllable based name generation.<br>
-    -Stats are hereditary and include mutation rates.<br>
-    -Game persists between sessions unless save file is deleted, progress will not be lost.<br>
+##Evolution simulator<br> 
+  An individual-creature focused evolutionary simulor with basic UI. <br> **This program does _not_ use the NEAT package**
+    ###Track your creatures by name and generation<br>
+        Name plates for high-level visual tracking.<br>
+        Selectable creatures to view creature information(genetics and relative data).<br>
+        Syllable based first and last name generation for recognition.<br>
+        Hereditary genome with mutation rates.<br>
+      ###Seasonal game time system<br>
+        4 seasons(minutes) separated by 60 days(seconds) as a game clock<br>
+        Food blooms seasonally and sprinkles daily<br>
+    -Game and creatures persist between sessions unless save file is deleted, progress will not be lost if close window (x) is used.<br>
 
 Roadmap:<br>
-
-Strength, speed, etc., are currently directly modified during mating.<br>
-To make it more DNA-like, these traits should be derived from a genetic code. Each gene could be a value that influences multiple traits (pleiotropy), <br>
-and traits could be influenced by multiple genes (polygenic traits).
-<br>
+~~Strength, speed, etc., are currently directly modified during mating. To make it more DNA-like, these traits should be derived from a genetic code.~~ <br>
+Gene values influences multiple traits (pleiotropy), and traits could be influenced by multiple genes (polygenic traits).<br>
+Year indicator<br>
+Persistent surname & family tree support <br>
 Species<br>
 Carnivores<br>
 Expanded food mechanisms<br>
