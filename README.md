@@ -1,6 +1,6 @@
 # EvoPi
 ## Evolution simulator<br> 
-  An individual-creature focused evolutionary simulor with basic UI. <br> **This program does _not_ use the NEAT package**
+  An individual-creature focused evolutionary simulator with basic UI. <br> **This program does _not_ use the NEAT package**
 ### Track your creatures by name and generation
   Name plates for high-level visual tracking.<br>
   Selectable creatures to view creature information(genetics and relative data).<br>
