@@ -34,27 +34,41 @@ def draw_leaderboard(surface, organisms, current_season, current_day):
         y_offset += entry_text.get_height() + 8
 
 def draw_organism_info(surface, organism):
-    """Draws organism stats panel"""
+    """Draws organism stats panel with dynamic genetic traits"""
     if not organism:
         return
 
+    # Core non-genetic traits and genome indicator
     traits = [
         f"Name: {organism.name}",
         f"Generation: {organism.generation_number}",
         f"Energy: {int(organism.energy)}",
         f"Age: {int(organism.age)}s",
-        f"Lifespan: {int(organism.lifespan)}s",
-        f"Speed: {organism.speed:.2f}",
-        f"Strength: {organism.strength:.2f}",
-        f"Sight Radius: {int(organism.sight_radius)}",
-        f"Size: {int(organism.organism_size)}",
-        f"Goal: {organism.current_goal}"
+        f"Goal: {organism.current_goal}",
+        f"Genome:"
     ]
-    
-    # Panel setup
+
+    # Dynamically add all genetic traits
+    for trait_name in sorted(organism.genome.genes.keys()):
+        value = getattr(organism, trait_name)
+        # Smart formatting based on trait type
+        if trait_name == 'lifespan':
+            formatted = f"{int(value)}s"
+        elif isinstance(value, float):
+            formatted = f"{value:.2f}"
+        else:
+            formatted = f"{int(value)}"
+        traits.append(f"  {trait_name.capitalize()}: {formatted}")
+
+    # Panel setup with dynamic sizing
     padding = 10
     line_height = INFO_FONT.get_height()
-    panel_width = 250
+    max_width = 250
+    
+    # Calculate required width
+    max_text_width = max(INFO_FONT.size(trait)[0] for trait in traits)
+    panel_width = min(max(max_text_width + padding*2, 250), SCREEN_WIDTH//3)
+    
     content_height = len(traits) * (line_height + 5) + padding * 2
     
     panel = pygame.Surface((panel_width, content_height), pygame.SRCALPHA)
@@ -70,7 +84,6 @@ def draw_organism_info(surface, organism):
 
     # Position panel
     surface.blit(panel, (SCREEN_WIDTH - panel_width - 10, 10))
-
 class ToggleButton:
     def __init__(self, x, y, width, height, text, font, initial_state=False):
         self.rect = pygame.Rect(x, y, width, height)

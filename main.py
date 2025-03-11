@@ -24,6 +24,7 @@ from user_interface import init_ui, draw_leaderboard, draw_organism_info, Toggle
 from game_gc import clean_game_state # garbage collection script
 from game_state import save_game_state, load_game_state #save and load functionality - uses data collection function save_current_state
 from game_clock import GameClock #game clock for days and seasons
+from genetics import Genome, Gene
 
 # --- Initialize Pygame ---
 pygame.init() 
@@ -240,29 +241,35 @@ class Food:
         self.cached_surface = self._create_cached_surface()
 # --- Organism Class ---
 class Organism:
-    def __init__(self, position, generation_number=1, direction=None, strength=None, speed=None, sight_radius=None, energy=None, name=None, current_goal=None, base_color=None, organism_size=None, lifespan=None, age=None):
-        self.position = np.array(position, dtype=float)  # Store position as NumPy array
+    def __init__(self, position, generation_number=1, direction=None, genome=None, 
+                 energy=None, name=None, current_goal=None, base_color=None, 
+                 organism_size=None, lifespan=None, age=None):
+        # Initialize genome first
+        self.genome = genome if genome is not None else Genome()
+        
+        # Dynamically set traits from genome
+        for trait_name in self.genome.genes:
+            setattr(self, trait_name, self.genome.get_trait(trait_name))
+        
+        # Existing position/direction initialization
+        self.position = np.array(position, dtype=float)
         self.direction = direction if direction is not None else random.uniform(0, 360)
-        self.strength = strength if strength is not None else random.uniform(1, 3)
-        self.speed = speed if speed is not None else 1.0 #random.uniform(1, 2) #organism speed range
-        self.sight_radius = sight_radius if sight_radius is not None else ray_length
-        self.energy = energy if energy is not None else 100
+        
+        # Modified energy calculation using metabolism
+        self.energy = energy if energy is not None else 100 * self.metabolism
+        
+        # Set color from genome
+        self.base_color = base_color if base_color is not None else self.genome.get_color()
+        
+        # Rest of initialization remains the same
         self.generation_number = generation_number
         self.name = name if name is not None else self.generate_name()
-        self.targeted_food = None # Initialize targeted_food
+        self.targeted_food = None
         self.current_goal = current_goal if current_goal is not None else "food"
-        self.base_color = base_color if base_color is not None else self.calculate_color_from_attributes() # Call color function here
-        # Use a different parameter name (organism_size)
-        if organism_size is not None:
-            self.organism_size = organism_size  # Use the passed parameter
-        else:
-            self.organism_size = base_organism_size  # Use the global variable
-        
-        self.lifespan = lifespan if lifespan is not None else random.uniform(60 * 1, 60 * 2) # default lifespan is 1-2 minutes (60 seconds times low range to 60 seconds times high range)
         self.age = age if age is not None else 0
-        self.last_direction_change_time = pygame.time.get_ticks()  # For wander smooth turn
-        self.wander_turn_interval = random.uniform(1000, 3000)  # Wander turn interval milliseconds
-        self.ray_cast_results = {} # Store ray cast results
+        self.last_direction_change_time = pygame.time.get_ticks()
+        self.wander_turn_interval = random.uniform(1000, 3000)
+        self.ray_cast_results = {}
 
 
     @staticmethod
@@ -321,8 +328,18 @@ class Organism:
             # Create syllables.json if it doesn't exist
             if not syllables_path.exists():
                 with open(syllables_path, "w") as f:
-                    json.dump({"syllables": ["kra", "mor", "fin", "thor", "ly", "dra", "gla", "vis", "nox", "zen", "pyr", "thos", "rel", "vyn", "zyl", "quor", "myr", "jex", "fex", "wix", "lox", "rex", "vex", "zax", "plox", "trix", "blor", "grak", "zind", "vorth", "quil", "mord", "flax", "nix", "quiv", "jolt"]}, f, indent=4) #add more syllables here
-
+                    json.dump({"syllables": [
+                        "kra", "mor", "fin", "thor", "ly", "dra", "gla", "vis", "nox", "zen",
+                        "pyr", "thos", "rel", "vyn", "zyl", "quor", "myr", "jex", "fex", "wix",
+                        "lox", "rex", "vex", "zax", "plox", "trix", "blor", "grak", "zind", "vorth",
+                        "quil", "mord", "flax", "nix", "quiv", "jolt", "brel", "dorn", "fyr", "glyn",
+                        "hax", "jorm", "krel", "lorn", "myn", "phex", "qyr", "ryn", "syx", "tyr",
+                        "vrox", "wyx", "zorn", "plix", "trax", "blyn", "drax", "frol", "grix", "hurn",
+                        "jyl", "krax", "lynn", "morth", "prox", "quyl", "ryx", "syl", "tron", "vix",
+                        "wyn", "zorth", "plax", "tryn", "blix", "dron", "fyx", "glynx", "hurm", "jyx",
+                        "kryl", "lyx", "morx", "pryx", "quorn", "rynox", "sylx", "trox", "vlyn", "wyrm",
+                        "zylx", "plorn", "tryx", "blorn", "drix"
+                    ]}, f, indent=4)  # Expanded syllables here
             with open(syllables_path, "r") as f:
                 data = json.load(f)
                 return data["syllables"]
@@ -331,11 +348,6 @@ class Organism:
             print(f"Error loading/creating syllables: {e}. Using default syllables.")
             return ["kra", "mor", "fin", "thor", "ly", "dra", "gla", "vis", "nox", "zen", "pyr", "thos", "rel", "vyn", "zyl", "quor", "myr", "jex", "fex", "wix", "lox", "rex", "vex", "zax", "plox", "trix"]  # Default syllables
 
-    '''def generate_name(self):
-        """Generates a name using prefix, suffix and generation number."""
-        prefix = random.choice(name_prefixes)
-        suffix = random.choice(name_suffixes)
-        return f"{prefix}{suffix}-{random.randint(1000, 9999)}-({self.generation_number})"'''
     def cast_rays_for_food_threaded(self, food_list, organism_data):
         """Casts rays to detect food within FOV and range and returns all in FOV with distances."""
         organism_pos = organism_data['position']
@@ -444,7 +456,7 @@ class Organism:
         baseline_energy_cost = 0.1  # Baseline energy cost per frame
 
         # Calculate energy expenditure based on size and speed
-        size_factor = self.organism_size / baseline_size
+        size_factor = self.size / baseline_size
         speed_factor = self.speed / baseline_speed
 
         # Adjust energy expenditure based on size and speed
@@ -462,172 +474,36 @@ class Organism:
         self.energy -= energy_cost
 
     def mate(self, other_parent):
-        """Sexual reproduction with another organism using enhanced DNA evolution"""
+        """Sexual reproduction with another organism using genetic inheritance"""
+        # Energy check - REQUIRED TO PREVENT OVERPRODUCTION
         half_mating_energy = min_mating_energy_trigger * 0.5
-        per_parent_energy_cost = half_mating_energy * 0.5
-
-        if debug:
-            print(f"{self.name}: Attempting to mate with {other_parent.name}")
-
-        if self.energy < half_mating_energy or other_parent.energy < half_mating_energy:
-            if debug:
-                print(f"    {self.name}: Mating failed - Insufficient energy (Self: {int(self.energy)}, Mate: {int(other_parent.energy)})")
+        if (self.energy < half_mating_energy or 
+            other_parent.energy < half_mating_energy):
             return None
 
-        # Deduct energy from both parents
-        self.energy -= per_parent_energy_cost
-        other_parent.energy -= per_parent_energy_cost
-        if debug:
-            print(f"    {self.name}: Energy after mating cost - Self: {int(self.energy)}, Mate: {int(other_parent.energy)}")
+        # Energy cost - CRUCIAL FOR BALANCE
+        energy_cost = half_mating_energy * 0.75  # 75% of half trigger
+        self.energy -= energy_cost
+        other_parent.energy -= energy_cost
 
-        # DNA Configuration - Easily expandable
-        inheritable_traits = [
-            'strength', 
-            'speed',
-            'sight_radius',
-            'organism_size',
-            'lifespan', 
-            'base_color'
-        ]
-
-        mutation_config = {
-            # Format: trait: (mutation_rate, min_value, max_value, mutation_strength)
-            'strength': (0.15, 0.5, 5.0, 0.2),
-            'speed': (0.15, 0.5, 5.5, 0.15),
-            'sight_radius': (0.1, 50, 1000, 0.1),
-            'organism_size': (0.1, 1, 100, 0.15),
-            'lifespan': (0.1, 60, 1000, 0.1),
-            'base_color': (0.05, None, None, 20)  # Color mutation in RGB space
-        }
-
-        # Genetic Crossover - Blend parent DNA
-        child_dna = {}
-        for trait in inheritable_traits:
-            # Random inheritance with potential blending
-            inheritance_type = random.choice(['average', 'parent1', 'parent2'])
-
-            if inheritance_type == 'average':
-                if trait == 'base_color':
-                    # Average RGB components for base_color
-                    parent1_color = np.array(getattr(self, trait))
-                    parent2_color = np.array(getattr(other_parent, trait))
-                    child_dna[trait] = tuple(( (parent1_color + parent2_color) / 2 ).astype(int)) # Component-wise average and convert to tuple
-                else:
-                    child_dna[trait] = (getattr(self, trait) + getattr(other_parent, trait)) / 2
-            else:
-                child_dna[trait] = getattr(self, trait) if inheritance_type == 'parent1' else getattr(other_parent, trait)
-
-        # Genetic Mutation
-        for trait, (rate, min_val, max_val, strength) in mutation_config.items():
-            if random.random() < rate:
-                if trait == 'base_color':
-                    # Mutate color by adjusting RGB values
-                    mutated_color = [
-                        min(255, max(0, channel + random.randint(-strength, strength)))
-                        for channel in child_dna[trait]
-                    ]
-                    child_dna[trait] = tuple(mutated_color)
-                else:
-                    # Apply percentage-based mutation
-                    mutation = 1 + random.uniform(-strength, strength)
-                    child_dna[trait] = min(max_val, max(min_val, child_dna[trait] * mutation))
-
-        # Create offspring
-        child_position = (
-            (self.position[0] + other_parent.position[0]) / 2,
-            (self.position[1] + other_parent.position[1]) / 2
-        )
-
+        # Create child genome
+        child_genome = Genome(parent1=self.genome, parent2=other_parent.genome)
+        
+        # Create child with genetic traits
         child = Organism(
-            position=child_position,
-            generation_number=max(self.generation_number, other_parent.generation_number) + 1,
-            **{trait: child_dna[trait] for trait in inheritable_traits}
-        )
-
-        if debug:
-            print(f"    {self.name}: Child '{child.name}' created with DNA: {child_dna}")
-
+                position=((self.position[0] + other_parent.position[0])/2,
+                (self.position[1] + other_parent.position[1])/2),
+                generation_number=max(self.generation_number, other_parent.generation_number) + 1,
+                genome=child_genome,
+                base_color=child_genome.get_color()  # Use genome's color method
+            )
         return child
-        """Sexual reproduction with another organism using enhanced DNA evolution"""
-        half_mating_energy = min_mating_energy_trigger * 0.5
-        per_parent_energy_cost = half_mating_energy * 0.5
-        
-        if debug:
-            print(f"{self.name}: Attempting to mate with {other_parent.name}")
-            
-        if self.energy < half_mating_energy or other_parent.energy < half_mating_energy:
-            if debug:
-                print(f"    {self.name}: Mating failed - Insufficient energy (Self: {int(self.energy)}, Mate: {int(other_parent.energy)})")
-            return None
-
-        # Deduct energy from both parents
-        self.energy -= per_parent_energy_cost
-        other_parent.energy -= per_parent_energy_cost
-        if debug:
-            print(f"    {self.name}: Energy after mating cost - Self: {int(self.energy)}, Mate: {int(other_parent.energy)})")
-
-        # DNA Configuration - Easily expandable
-        inheritable_traits = [
-            'strength',
-            'speed', 
-            'sight_radius', 
-            'organism_size', 
-            'lifespan', 
-            'base_color'
-        ]
-        
-        mutation_config = {
-            # Format: trait: (mutation_rate, min_value, max_value, mutation_strength)
-            'strength': (0.15, 0.5, 3.0, 0.2),
-            'speed': (0.15, 0.5, 2.5, 0.15),
-            'sight_radius': (0.1, 50, 200, 0.1),
-            'organism_size': (0.1, 4, 20, 0.05),
-            'lifespan': (0.1, 60, 600, 0.1),
-            'base_color': (0.05, None, None, 20)  # Color mutation in RGB space
-        }
-
-        # Genetic Crossover - Blend parent DNA
-        child_dna = {}
-        for trait in inheritable_traits:
-            # Random inheritance with potential blending
-            inheritance_type = random.choice(['average', 'parent1', 'parent2'])
-            
-            if inheritance_type == 'average':
-                child_dna[trait] = (getattr(self, trait) + getattr(other_parent, trait)) / 2
-            else:
-                child_dna[trait] = getattr(self, trait) if inheritance_type == 'parent1' else getattr(other_parent, trait)
-
-        # Genetic Mutation
-        for trait, (rate, min_val, max_val, strength) in mutation_config.items():
-            if random.random() < rate:
-                if trait == 'base_color':
-                    # Mutate color by adjusting RGB values
-                    mutated_color = [
-                        min(255, max(0, channel + random.randint(-strength, strength)))
-                        for channel in child_dna[trait]
-                    ]
-                    child_dna[trait] = tuple(mutated_color)
-                else:
-                    # Apply percentage-based mutation
-                    mutation = 1 + random.uniform(-strength, strength)
-                    child_dna[trait] = min(max_val, max(min_val, child_dna[trait] * mutation))
-
-        # Create offspring
-        child_position = (
-            (self.position[0] + other_parent.position[0]) / 2,
-            (self.position[1] + other_parent.position[1]) / 2
-        )
-        
-        child = Organism(
-            position=child_position,
-            generation_number=max(self.generation_number, other_parent.generation_number) + 1,
-            **{trait: child_dna[trait] for trait in inheritable_traits}
-        )
-
-        if debug:
-            print(f"    {self.name}: Child '{child.name}' created with DNA: {child_dna}")
-            
-        return child
+    def _calculate_genetic_color(self, genome):
+        """Convert genetic traits to color representation"""
+        red = int(np.interp(genome.get_trait('strength'), [0.5, 2], [0, 255]))
+        green = int(np.interp(genome.get_trait('speed'), [0.8, 1.5], [0, 255]))
+        blue = int(np.interp(genome.get_trait('sight'), [80, 160], [0, 255]))
+        return (red, green, blue)
     def update(self, food_list, organisms):
         """Update organism behavior based on current goal. Ray casting results are expected to be pre-calculated."""
         self.age += 1/60
@@ -741,25 +617,25 @@ class Organism:
     def draw(self, surface):
         """Draw the organism and debug rays - Optimized Version."""
         # --- 1. Draw Base Organism (Circle) ---
-        pygame.draw.circle(surface, self.base_color, (int(self.position[0]), int(self.position[1])), int(self.organism_size))
+        pygame.draw.circle(surface, self.base_color, (int(self.position[0]), int(self.position[1])), int(self.size))
 
         # --- 2. Draw White Ring if Selected ---
         if selected_organism == self:
-            pygame.draw.circle(surface, white, (int(self.position[0]), int(self.position[1])), int(self.organism_size) + 5, 2)  # White ring around selected organism
+            pygame.draw.circle(surface, white, (int(self.position[0]), int(self.position[1])), int(self.size) + 5, 2)  # White ring around selected organism
 
         # --- 3. Mate Seeking Indicator ---
         if self.current_goal == "mate_seeking":
-            pygame.draw.circle(surface, yellow, (int(self.position[0]), int(self.position[1])), int(self.organism_size) + 3, 2)
+            pygame.draw.circle(surface, yellow, (int(self.position[0]), int(self.position[1])), int(self.size) + 3, 2)
 
         # --- 4. Direction Indicator and Eyes ---
         # --- 4.1. Calculate Head Position (Direction Indicator End) ---
-        head_x = self.position[0] + math.cos(math.radians(self.direction)) * self.organism_size
-        head_y = self.position[1] - math.sin(math.radians(self.direction)) * self.organism_size
+        head_x = self.position[0] + math.cos(math.radians(self.direction)) * self.size
+        head_y = self.position[1] - math.sin(math.radians(self.direction)) * self.size
         pygame.draw.line(surface, white, (int(self.position[0]), int(self.position[1])), (int(head_x), int(head_y)), 3)
 
         # --- 4.2. Calculate Eye Positions (Inward and Closer) ---
-        eye_offset_distance = self.organism_size / 1.5  # Reduced offset for inward eyes
-        eye_radius = self.organism_size / 2
+        eye_offset_distance = self.size / 1.5  # Reduced offset for inward eyes
+        eye_radius = self.size / 2
         pupil_radius = eye_radius / 2
         pupil_offset_distance = eye_radius / 3
 
@@ -791,13 +667,13 @@ class Organism:
 
         # --- 5. Name Display ---
         name_surface = name_font.render(self.name, True, white)
-        name_rect = name_surface.get_rect(center=(int(self.position[0]), int(self.position[1] - self.organism_size - 30)))
+        name_rect = name_surface.get_rect(center=(int(self.position[0]), int(self.position[1] - self.size - 30)))
         surface.blit(name_surface, name_rect)
 
         # --- 6. Energy and Age Display ---
         energy_age_text = f"⚡{int(self.energy)}|⌛{int(self.age)}/{int(self.lifespan)}"
         energy_age_surface = name_font.render(energy_age_text, True, white)
-        energy_age_rect = energy_age_surface.get_rect(center=(int(self.position[0]), int(self.position[1] - self.organism_size - 10)))
+        energy_age_rect = energy_age_surface.get_rect(center=(int(self.position[0]), int(self.position[1] - self.size - 10)))
         surface.blit(energy_age_surface, energy_age_rect)
 
         # Organism class (inside the draw method)
@@ -844,67 +720,45 @@ class Organism:
                 mate = mate_info['mate']
                 pygame.draw.line(surface, yellow, (int(self.position[0]), int(self.position[1])), (int(mate.position[0]), int(mate.position[1])), 1)    
     def __getstate__(self):
-        """Return state values to be pickled - convert NumPy arrays to lists."""
-        state = {
-            'position': self.position.tolist(),
-            'direction': self.direction,
-            'strength': self.strength,
-            'speed': self.speed,
-            'sight_radius': self.sight_radius,
-            'energy': self.energy,
-            'generation_number': self.generation_number,
-            'name': self.name,
-            'current_goal': self.current_goal,
-            'base_color': self.base_color,
-            'organism_size': self.organism_size,
-            'lifespan': self.lifespan,
-            'age': self.age,
-            'last_direction_change_time': self.last_direction_change_time,  # Save wander timer state
-            'wander_turn_interval': self.wander_turn_interval,  # Save wander timer state
-            'targeted_food': self.targeted_food, # ADD THIS LINE - Save targeted_food
-        }
-        return state
+        """Automatically capture all instance attributes except those derived from genome"""
+        state = self.__dict__.copy()
+        
+        # Remove genome-derived traits (they're stored in the genome object)
+        for trait in self.genome.genes.keys():
+            state.pop(trait, None)
+        
+        # Convert numpy arrays to lists for serialization
+        state['position'] = self.position.tolist()
+        
+        # Keep these special attributes that aren't genome-derived
+        keep_attrs = ['genome', 'position', 'direction', 'energy', 'generation_number',
+                     'name', 'current_goal', 'base_color', 'age', 'last_direction_change_time',
+                     'wander_turn_interval', 'targeted_food', 'ray_cast_results']
+        
+        return {k: v for k, v in state.items() if k in keep_attrs}
 
-    def calculate_color_from_attributes(self):
-        """Calculates organism color based on its attributes, creating a spectrum."""
-        # --- Normalize attributes to 0-255 range ---
-        # Example normalization (adjust ranges as needed based on your attribute distributions)
-        normalized_strength = int(self.strength / 3.0 * 255) # Strength max is approx 3
-        normalized_speed = int(self.speed / 2.0 * 255)      # Speed max is approx 2
-        normalized_sight = int(self.sight_radius / ray_length * 255) # Sight radius max is ray_length
-
-        # --- Map attributes to RGB components ---
-        red_component = normalized_strength
-        green_component = normalized_speed
-        blue_component = 255 - normalized_sight  # Invert sight to get different spectrum range
-
-        # --- Ensure components are within 0-255 ---
-        red_component = max(0, min(red_component, 255))
-        green_component = max(0, min(green_component, 255))
-        blue_component = max(0, min(blue_component, 255))
-
-
-        return (red_component, green_component, blue_component) # Return RGB tuple
     def __setstate__(self, state):
-        """Restore state from pickled values - convert lists to NumPy arrays."""
-        self.position = np.array(state.get('position', [random.uniform(0, screen_width), random.uniform(0, screen_height)]), dtype=float)
-        self.direction = state.get('direction', random.uniform(0, 360))
-        self.strength = state.get('strength', random.uniform(1, 3))
-        self.speed = state.get('speed', random.uniform(1, 1.15))
-        self.sight_radius = state.get('sight_radius', ray_length)
-        self.energy = state.get('energy', 100)
-        self.generation_number = state.get('generation_number', 1)
-        self.name = state.get('name', self.generate_name())
-        self.current_goal = state.get('current_goal', "food")
-        self.base_color = state.get('base_color', self.calculate_color_from_attributes()) # Default to attribute-based color if not in state
-        self.organism_size = state.get('organism_size', organism_size)  # Use the global organism_size
-        self.lifespan = state.get('lifespan', random.uniform(60 * 2, 60 * 5))
-        self.age = state.get('age', 0)
-        self.last_direction_change_time = state.get('last_direction_change_time', pygame.time.get_ticks())  # Load wander timer state, default to current time
-        self.wander_turn_interval = state.get('wander_turn_interval', random.uniform(1000, 3000))  # Load wander timer interval, default to random
-        self.targeted_food = state.get('targeted_food', None) # ADD THIS LINE - Load targeted_food, default to None
-
-
+        """Restore state dynamically"""
+        # Restore basic attributes
+        self.__dict__.update(state)
+        
+        # Convert position back to numpy array
+        self.position = np.array(state['position'], dtype=float)
+        
+        # Restore genome-derived traits
+        if hasattr(self, 'genome'):
+            for trait_name in self.genome.genes:
+                setattr(self, trait_name, self.genome.get_trait(trait_name))
+        
+        # Handle missing attributes from older versions
+        defaults = {
+            'ray_cast_results': {},
+            'targeted_food': None,
+            'wander_turn_interval': random.uniform(1000, 3000)
+        }
+        for attr, default in defaults.items():
+            if not hasattr(self, attr):
+                setattr(self, attr, default)
 # --- Game Functions ---
 def generate_food():
     """Generates food items in clumps seasonally."""
