@@ -18,6 +18,7 @@ Species<br>
 Carnivores<br>
 Expanded food mechanisms<br>
 <br>
+<br>Ideas:
 <br>Gene expression<br>     Some genes only activate under certain conditions, like reaching a certain age or energy level
 <br>Epigenetics<br> Where environmental factors influence gene expression without changing the DNA. For example, if an organism experiences starvation, maybe its offspring have genes that make them more efficient at food utilization, even if their DNA is the same
 <br>
