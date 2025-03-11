@@ -26,4 +26,7 @@ Expanded food mechanisms<br>
 <br>Genetic disorders    or beneficial mutations based on probability. Some mutations could be harmful, reducing fitness, while others could be beneficial.
 <br>Gene regulation networks<br>    how genes turn each other on or off. This could lead to emergent traits based on combinations of genes
 
+<br>[Screenshot 2025-03-11 131113]<br>
+![Screenshot 2025-03-11 131113](https://github.com/user-attachments/assets/e1cda6a4-4dd8-4892-afb2-a7dbcb7532a6)
+<br>[Screenshot 2025-03-10 162546]<br>
 ![Screenshot 2025-03-10 162546](https://github.com/user-attachments/assets/5c5ba7dd-cb02-4c45-b6f4-479630bdbc30)
