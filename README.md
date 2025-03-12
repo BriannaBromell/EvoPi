@@ -8,10 +8,13 @@
   Hereditary genome with mutation rates.<br>
 ### Seasonal game time system
   4 seasons(minutes) separated by 60 days(seconds) as a game clock<br>
-  Food blooms seasonally and sprinkles daily<br>
+  Food blooms seasonally and dynamically sprinkles clumps multiple times daily<br>
 ### Keep your progress
 Game and creatures persist between sessions unless save file is deleted, progress will not be lost if close window (x) is used.<br>
 Future updates *should* be forward compatible meaning low or no creature loss.
+### Genome attributes
+  Creatures have a diploid(two alleles) genome and crossover traits with gene dominance mechanics.
+    Examples: Sight FOV & range, strength, speed, size, and more
 
 ## Roadmap:<br>
 ~~Strength, speed, etc., are currently directly modified during mating. To make it more DNA-like, these traits should be derived from a genetic code.~~ <br>
