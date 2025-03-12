@@ -120,32 +120,29 @@ num_food = num_food_clumps * food_per_clump
 food_size = 5
 organism_size = 10
 base_organism_size = 8
-ray_length = 120
-ray_fov = 120
+
 num_rays = 3
 food_spawn_radius = min(screen_width, screen_height) * 0.8
 min_mating_energy_trigger = 400
 max_mating_energy_trigger = 600
 
-# --- Density-Dependent Food Growth Parameters ---
-base_food_growth_rate = 0.7
-density_threshold_for_slow_growth = num_food * 0.5
-slow_growth_factor = 0.2
-
 # --- Incremental Food Generation Parameters ---
-base_food_generation_interval = 0.25  # Seconds per particle at low density
-food_density_speedup_factor = 1.0  # Reduction in interval per food item over threshold - adjust for speed
-max_food_density_for_speedup = num_food * 0.15  # Density above which speedup starts
+    # Base time between food particles when density is below threshold
+base_food_generation_interval = 0.05  # Seconds per particle at low density
+    # How much the interval decreases per excess food item above threshold
+density_speedup_rate = 0.10  
+    # Density level (number of food items) where accelerated growth begins
+speedup_density_threshold = num_food * 0.15  
 
 # --- Seasonal Food Respawn Parameters ---
 seasonal_respawn_interval = 30  # Seconds between seasonal respawn attempts
 seasonal_respawn_chance = 0.7  # 70% chance of respawn each season
 
-# --- Naming Prefixes and Suffixes ---
+# --- Naming Prefixes and Suffixes --- Legacy
 #carnivore_name_prefixes = ["Alpha", "Beta", "Gamma", "Delta", "Epsilon", "Zeta", "Eta", "Theta"]
 #carnivore_name_suffixes = ["Predator", "Hunter", "Seeker", "Crawler", "Provoker", "Aggressor", "Stalker", "Ranger"]
-name_prefixes = ["Geo", "Bio", "Eco", "Evo", "Hydro", "Pyro", "Chrono", "Astro", "Cosmo", "Terra"]
-name_suffixes = ["Bot", "Mite", "Pod", "Worm", "Beast", "Fly", "Drake", "Wing", "Crawler", "Shaper"]
+#name_prefixes = ["Geo", "Bio", "Eco", "Evo", "Hydro", "Pyro", "Chrono", "Astro", "Cosmo", "Terra"]
+#name_suffixes = ["Bot", "Mite", "Pod", "Worm", "Beast", "Fly", "Drake", "Wing", "Crawler", "Shaper"]
 
 # --- Helper Functions ---
 def get_distance_np(positions1, positions2):
@@ -329,17 +326,29 @@ class Organism:
             if not syllables_path.exists():
                 with open(syllables_path, "w") as f:
                     json.dump({"syllables": [
-                        "kra", "mor", "fin", "thor", "ly", "dra", "gla", "vis", "nox", "zen",
+                        "va", "mor", "fin", "thor", "ly", "dra", "gla", "vis", "nox", "zen",
                         "pyr", "thos", "rel", "vyn", "zyl", "quor", "myr", "jex", "fex", "wix",
                         "lox", "rex", "vex", "zax", "plox", "trix", "blor", "grak", "zind", "vorth",
                         "quil", "mord", "flax", "nix", "quiv", "jolt", "brel", "dorn", "fyr", "glyn",
                         "hax", "jorm", "krel", "lorn", "myn", "phex", "qyr", "ryn", "syx", "tyr",
                         "vrox", "wyx", "zorn", "plix", "trax", "blyn", "drax", "frol", "grix", "hurn",
-                        "jyl", "krax", "lynn", "morth", "prox", "quyl", "ryx", "syl", "tron", "vix",
+                        "sa", "krax", "lynn", "morth", "prox", "quyl", "ryx", "syl", "tron", "vix",
                         "wyn", "zorth", "plax", "tryn", "blix", "dron", "fyx", "glynx", "hurm", "jyx",
                         "kryl", "lyx", "morx", "pryx", "quorn", "rynox", "sylx", "trox", "vlyn", "wyrm",
-                        "zylx", "plorn", "tryx", "blorn", "drix"
-                    ]}, f, indent=4)  # Expanded syllables here
+                        "nes", "plorn", "tryx", "blorn", "drix", "va", "nes", "sa", "bri", "an", "na", "el", "i", "za", "beth",
+                        "char", "lotte", "so", "phi", "a", "em", "ma", "ol", "iv", "ia",
+                        "no", "ah", "liam", "jac", "son", "eth", "an", "hen", "ry",
+                        "will", "am", "ben", "ja", "min", "a", "vi", "a", "dan",
+                        "iel", "mat", "thew", "chris", "to", "pher", "and", "rew", "jos",
+                        "eph", "jam", "es", "rob", "ert", "mic", "hael", "dav", "id",
+                        "ste", "ven", "ge", "org", "ed", "ward", "pat", "rick", "al",
+                        "ex", "an", "der", "nic", "ho", "las", "sam", "uel", "jon", "ath",
+                        "an", "tim", "o", "thy", "vin", "cent", "lau", "ren", "tay",
+                        "lor", "mad", "i", "son", "hay", "ley", "han", "nah", "paig",
+                        "e", "mor", "gan", "ash", "ley", "kait", "lyn", "court", "ney",
+                        "shel", "by", "whit", "ney", "steph", "anie", "am", "ber", "rach",
+                        "el", "au", "drey", "nat", "alie", "sab", "ri", "na", "cam", "eron"
+                    ]}, f, indent=4)  # Expanded additional syllables here
             with open(syllables_path, "r") as f:
                 data = json.load(f)
                 return data["syllables"]
@@ -357,12 +366,12 @@ class Organism:
             return [] # Return empty list if no food
 
         num_rays_val = num_rays
-        start_angle = organism_direction - ray_fov / 2
-        angles = normalize_angle(start_angle + np.arange(num_rays_val) * (ray_fov / (num_rays_val - 1) if num_rays_val > 1 else 0) )
+        start_angle = organism_direction - self.sight_fov / 2
+        angles = normalize_angle(start_angle + np.arange(num_rays_val) * (self.sight_fov / (num_rays_val - 1) if num_rays_val > 1 else 0) )
         radians = np.radians(angles)
 
-        ray_ends_x = organism_pos[0] + np.cos(radians) * ray_length
-        ray_ends_y = organism_pos[1] - np.sin(radians) * ray_length
+        ray_ends_x = organism_pos[0] + np.cos(radians) * self.sight_range
+        ray_ends_y = organism_pos[1] - np.sin(radians) * self.sight_range
         ray_ends = np.stack([ray_ends_x, ray_ends_y], axis=-1)
 
         food_positions = np.array([food.position for food in food_list])
@@ -374,7 +383,7 @@ class Organism:
         angle_diffs = (angles_to_food - organism_direction) % 360
         angle_differences = np.where(angle_diffs > 180, 360 - angle_diffs, angle_diffs)
 
-        food_in_fov_mask = (distances_to_food <= ray_length) & (angle_differences <= ray_fov / 2)
+        food_in_fov_mask = (distances_to_food <= self.sight_range) & (angle_differences <= self.sight_fov / 2)
         food_in_fov_indices = np.where(food_in_fov_mask)[0]
 
         detected_food = [] # List to store food in FOV with distances
@@ -394,12 +403,12 @@ class Organism:
             return [] # Return empty list if no mates
 
         num_rays_val = num_rays
-        start_angle = organism_direction - ray_fov / 2
-        angles = normalize_angle(start_angle + np.arange(num_rays_val) * (ray_fov / (num_rays_val - 1) if num_rays_val > 1 else 0))
+        start_angle = organism_direction - self.sight_fov / 2
+        angles = normalize_angle(start_angle + np.arange(num_rays_val) * (self.sight_fov / (num_rays_val - 1) if num_rays_val > 1 else 0))
         radians = np.radians(angles)
 
-        ray_ends_x = organism_pos[0] + np.cos(radians) * ray_length
-        ray_ends_y = organism_pos[1] - np.sin(radians) * ray_length
+        ray_ends_x = organism_pos[0] + np.cos(radians) * self.sight_range
+        ray_ends_y = organism_pos[1] - np.sin(radians) * self.sight_range
         ray_ends = np.stack([ray_ends_x, ray_ends_y], axis=-1)
 
         mate_positions = np.array([mate.position for mate in potential_mates])
@@ -409,7 +418,7 @@ class Organism:
         angle_diffs = (angles_to_mates - organism_direction) % 360
         angle_differences = np.where(angle_diffs > 180, 360 - angle_diffs, angle_diffs)
 
-        mates_in_fov_mask = (distances_to_mates <= ray_length) & (angle_differences <= ray_fov / 2)
+        mates_in_fov_mask = (distances_to_mates <= self.sight_range) & (angle_differences <= self.sight_fov / 2)
         mates_in_fov_indices = np.where(mates_in_fov_mask)[0]
 
         detected_mates = [] # List to store mates in FOV with distances
@@ -453,7 +462,8 @@ class Organism:
         # Baseline energy expenditure for size 10 and speed 1
         baseline_size = base_organism_size
         baseline_speed = 1
-        baseline_energy_cost = 0.1  # Baseline energy cost per frame
+        # Baseline energy cost per frame
+        baseline_energy_cost = self.metabolism / 10 #0.1  
 
         # Calculate energy expenditure based on size and speed
         size_factor = self.size / baseline_size
@@ -498,12 +508,6 @@ class Organism:
                 base_color=child_genome.get_color()  # Use genome's color method
             )
         return child
-    def _calculate_genetic_color(self, genome):
-        """Convert genetic traits to color representation"""
-        red = int(np.interp(genome.get_trait('strength'), [0.5, 2], [0, 255]))
-        green = int(np.interp(genome.get_trait('speed'), [0.8, 1.5], [0, 255]))
-        blue = int(np.interp(genome.get_trait('sight'), [80, 160], [0, 255]))
-        return (red, green, blue)
     def update(self, food_list, organisms):
         """Update organism behavior based on current goal. Ray casting results are expected to be pre-calculated."""
         self.age += 1/60
@@ -679,23 +683,23 @@ class Organism:
         # Organism class (inside the draw method)
         # --- 7. Debug FOV Drawing (Optimized) ---
         if debug and debug_fov_mode != "none" and fov_button.state:  # Only draw FOV if the FOV button is active
-            start_angle_deg = self.direction - ray_fov / 2
-            end_angle_deg = self.direction + ray_fov / 2
+            start_angle_deg = self.direction - self.sight_fov / 2
+            end_angle_deg = self.direction + self.sight_fov / 2
             start_ray_rad = math.radians(start_angle_deg) # Calculate radians once
             end_ray_rad = math.radians(end_angle_deg)   # Calculate radians once
 
-            fov_start_point = (self.position[0] + math.cos(start_ray_rad) * ray_length, self.position[1] - math.sin(start_ray_rad) * ray_length)
-            fov_end_point = (self.position[0] + math.cos(end_ray_rad) * ray_length, self.position[1] - math.sin(end_ray_rad) * ray_length)
+            fov_start_point = (self.position[0] + math.cos(start_ray_rad) * self.sight_range, self.position[1] - math.sin(start_ray_rad) * self.sight_range)
+            fov_end_point = (self.position[0] + math.cos(end_ray_rad) * self.sight_range, self.position[1] - math.sin(end_ray_rad) * self.sight_range)
 
             fov_arc_points = [] # Initialize once outside the if/elif blocks
             num_fov_segments = 6 # Number of segments - keep consistent
 
             # FOV Arc Points Calculation - Moved out of if/elif for reuse
             for i in range(num_fov_segments + 1):
-                angle_deg = start_angle_deg + (ray_fov / num_fov_segments) * i
+                angle_deg = start_angle_deg + (self.sight_fov / num_fov_segments) * i
                 angle_rad = math.radians(angle_deg) # Calculate radians inside loop
-                x = self.position[0] + math.cos(angle_rad) * ray_length
-                y = self.position[1] - math.sin(angle_rad) * ray_length
+                x = self.position[0] + math.cos(angle_rad) * self.sight_range
+                y = self.position[1] - math.sin(angle_rad) * self.sight_range
                 fov_arc_points.append((x, y))
 
             if debug_fov_mode == "full": # Draw full FOV cone
@@ -779,30 +783,44 @@ def generate_food():
             food_objects.append(Food(food_pos))
     return food_objects
 
-def generate_food_particle():
-    """Generates a single food particle at a random position within the spawn radius."""
-    angle = random.uniform(0, 2 * math.pi)
-    radius = random.uniform(0, food_spawn_radius)
-    x = screen_width / 2 + math.cos(angle) * radius
-    y = screen_height / 2 + math.sin(angle) * radius
-    food_pos = (x, y)
-    return Food(food_pos)
+def generate_food_particle(food_list):
+    """Generates food near existing clusters or randomly if no food exists."""
+    if food_list:  # Only attempt clustering if food exists
+        # Choose random existing food item as cluster center
+        cluster_center = random.choice(food_list).position
+        # Generate position within clump radius of the cluster center
+        angle = random.uniform(0, 2 * math.pi)
+        radius = random.uniform(0, clump_radius)
+        x = cluster_center[0] + math.cos(angle) * radius
+        y = cluster_center[1] + math.sin(angle) * radius
+    else:  # Fallback to random spawn if no food exists
+        angle = random.uniform(0, 2 * math.pi)
+        radius = random.uniform(0, food_spawn_radius)
+        x = screen_width/2 + math.cos(angle)*radius
+        y = screen_height/2 + math.sin(angle)*radius
+    return Food((x, y))
 
 def incremental_food_generation(food_list):
-    """Incrementally generates food particles based on density."""
+    """Generates food particles with density-accelerated spawning near clusters."""
     global food_generation_timer, food_generation_interval
 
     food_generation_timer -= 1/60
 
     if food_generation_timer <= 0:
-        food_list.append(generate_food_particle())
+        # Generate new food particle near existing clusters
+        new_food = generate_food_particle(food_list)
+        food_list.append(new_food)
 
-        food_density = len(food_list)
-        if food_density > max_food_density_for_speedup:
-            density_over_threshold = food_density - max_food_density_for_speedup
-            speedup_reduction = density_over_threshold * food_density_speedup_factor
-            food_generation_interval = max(0.1, base_food_generation_interval - speedup_reduction)
+        # Calculate density-based interval adjustment
+        current_density = len(food_list)
+        if current_density > speedup_density_threshold:
+            # Accelerate spawning proportional to excess density
+            density_over_threshold = current_density - speedup_density_threshold
+            interval_reduction = density_over_threshold * density_speedup_rate
+            food_generation_interval = max(0.05,  # Prevent excessive speed
+                base_food_generation_interval - interval_reduction)
         else:
+            # Use base interval when below density threshold
             food_generation_interval = base_food_generation_interval
 
         food_generation_timer = food_generation_interval

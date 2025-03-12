@@ -68,9 +68,11 @@ class Genome:
             # Speed: Movement capability (pixels per frame)
             'speed': Gene(random.uniform(0.8, 1.5), random.uniform(0.8, 1.5)),
             # Sight: Visual range (pixels)
-            'sight': Gene(random.uniform(80, 100), random.uniform(80, 100)),
+            'sight_range': Gene(random.uniform(130, 140), random.uniform(130, 140)),
+            # Sight: Visual field of view (pixels)
+            'sight_fov': Gene(random.uniform(110, 120), random.uniform(110, 120)),
             # Size: Physical size and energy requirements
-            'size': Gene(random.uniform(6, 9), random.uniform(6, 9)),
+            'size': Gene(random.uniform(10, 11), random.uniform(10, 11)),
             # Lifespan: Maximum age in seconds
             'lifespan': Gene(random.uniform(80, 90), random.uniform(80, 90)),
             # Metabolism: Energy efficiency multiplier
@@ -93,9 +95,9 @@ class Genome:
             self.genes[trait].mutate()
     def get_color(self):
         """Calculate organism color based on genetic traits"""
-        red = int(np.interp(self.get_trait('strength'), [0.5, 2], [0, 255]))
-        green = int(np.interp(self.get_trait('speed'), [0.8, 1.5], [0, 255]))
-        blue = int(np.interp(self.get_trait('sight'), [80, 160], [0, 255]))
+        red = int(np.interp(self.get_trait('strength'), [0.0, 2], [0, 255]))
+        green = int(np.interp(self.get_trait('speed'), [0.0, 1.5], [0, 255]))
+        blue = int(np.interp(self.get_trait('sight_range'), [00, 160], [0, 255]))
         return (red, green, blue)
     def get_trait(self, trait_name):
         """
@@ -111,7 +113,18 @@ class Genome:
         return {trait: (gene.alleles, gene.dominance) for trait, gene in self.genes.items()}
 
     def __setstate__(self, state):
-        """Reconstruct genome from serialized data"""
-        self.genes = {}
+        """Reconstruct genome from serialized data with forward compatibility to allow genome expansion"""
+        # Create base genome with current traits
+        self._generate_initial_genes()
+        
+        # Update with saved values where they exist
         for trait, (alleles, dominance) in state.items():
-            self.genes[trait] = Gene(alleles[0], alleles[1], dominance[0], dominance[1])
+            if trait in self.genes:
+                self.genes[trait] = Gene(alleles[0], alleles[1], dominance[0], dominance[1])
+        
+        # Add any missing traits from current version
+        current_traits = Genome().genes.keys()  # Get traits from fresh genome
+        for trait in current_traits:
+            if trait not in self.genes:
+                # Generate new trait with default initial values
+                self.genes[trait] = Gene(random.uniform(0.5, 2), random.uniform(0.5, 2))
