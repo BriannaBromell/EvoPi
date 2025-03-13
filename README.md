@@ -8,22 +8,12 @@ A custom individual-creature focused evolutionary simulator with advanced geneti
 <div style="display: flex; overflow-x: auto; gap: 16px; padding: 16px 0;">
   <div style="flex: 0 0 auto; min-width: 300px; text-align: left;">
     <img src="./images/1.png" style="height: 200px; border-radius: 8px;">
-    <p>Spring bloom</p>
+    <img src="./images/1.png" style="height: 200px; border-radius: 8px;">
+    <p>bloom</p>
   </div>
-  
   <div style="flex: 0 0 auto; min-width: 300px; text-align: center;">
     <img src="./images/1.png" style="height: 200px; border-radius: 8px;">
-    <p>Summer abundance</p>
-  </div>
-  
-  <div style="flex: 0 0 auto; min-width: 300px; text-align: center;">
-    <img src="./images/1.png" style="height: 200px; border-radius: 8px;">
-    <p>Autumn harvest</p>
-  </div>
-  
-  <div style="flex: 0 0 auto; min-width: 300px; text-align: center;">
-    <img src="./images/1.png" style="height: 200px; border-radius: 8px;">
-    <p>Winter survival</p>
+    <p> </p>
   </div>
 </div>
 
