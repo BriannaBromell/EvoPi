@@ -4,47 +4,29 @@ A custom individual-creature focused evolutionary simulator with advanced geneti
 
 ## Simulation Preview 🔍
 
-<div style="position: relative; width: 100%; margin: 20px 0;">
-  <div style="display: flex; gap: 16px; overflow-x: auto; scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; padding-bottom: 16px;">    
-    <!-- Spring -->
-    <div style="flex: 0 0 calc(100% - 32px); scroll-snap-align: start; min-width: 300px; max-width: 600px; margin-right: 16px;">
-      <img src="./images/1.png" 
-           style="width: 100%; height: 300px; object-fit: cover; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
-      <p style="text-align: center; color: #8b949e; margin-top: 8px;">Spring Bloom</p>
-    </div>
-    <!-- Summer -->
-    <div style="flex: 0 0 calc(100% - 32px); scroll-snap-align: start; min-width: 300px; max-width: 600px; margin-right: 16px;">
-      <img src="./images/1.png"
-           style="width: 100%; height: 300px; object-fit: cover; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
-      <p style="text-align: center; color: #8b949e; margin-top: 8px;">Summer Abundance</p>
-    </div>
-    <!-- Autumn -->
-    <div style="flex: 0 0 calc(100% - 32px); scroll-snap-align: start; min-width: 300px; max-width: 600px; margin-right: 16px;">
-      <img src="./images/1.png"
-           style="width: 100%; height: 300px; object-fit: cover; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
-      <p style="text-align: center; color: #8b949e; margin-top: 8px;">Autumn Harvest</p>
-    </div>
-    <!-- Winter -->
-    <div style="flex: 0 0 calc(100% - 32px); scroll-snap-align: start; min-width: 300px; max-width: 600px;">
-      <img src="./images/1.png"
-           style="width: 100%; height: 300px; object-fit: cover; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
-      <p style="text-align: center; color: #8b949e; margin-top: 8px;">Winter Survival</p>
-    </div>
-  </div>
-</div>
-
 <div style="display: flex; overflow-x: auto; gap: 16px; padding: 16px 0;">
   <div style="flex: 0 0 auto; min-width: 300px; text-align: left;">
     <img src="./images/1.png" style="height: 200px; border-radius: 8px;">
     <img src="./images/1.png" style="height: 200px; border-radius: 8px;">
-    <p>bloom</p>
-  </div>
-  <div style="flex: 0 0 auto; min-width: 300px; text-align: center;">
     <img src="./images/1.png" style="height: 200px; border-radius: 8px;">
     <p> </p>
   </div>
 </div>
-
+<div style="position: relative; width: 100%; margin: 2rem 0;">
+  <div style="display: flex; overflow-x: auto; scroll-snap-type: x mandatory; gap: 2rem; padding: 1rem 0; scrollbar-width: none;">    
+    <div style="flex: 0 0 100%; scroll-snap-align: start; text-align: center;">
+      <img src="./images/summer.png" 
+           style="max-width: 800px; width: 90%; height: auto; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
+      <p style="color: #8b949e; margin-top: 1rem;">Summer Season</p>
+    </div>
+    <div style="flex: 0 0 100%; scroll-snap-align: start; text-align: center;">
+      <img src="./images/winter.png"
+           style="max-width: 800px; width: 90%; height: auto; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
+      <p style="color: #8b949e; margin-top: 1rem;">Winter Season</p>
+    </div>
+    <!-- Add more images using same structure -->    
+  </div>
+</div>
 *Organisms interacting with food sources *
 
 ## Key Features 🔑
