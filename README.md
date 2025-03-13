@@ -5,14 +5,8 @@ A custom individual-creature focused evolutionary simulator with advanced geneti
 ## Simulation Preview 🔍
 ## Simulation Preview 🔍
 
-<div align="center">
-  <img src="https://github.com/user-attachments/assets/5c5ba7dd-cb02-4c45-b6f4-479630bdbc30"
-       width="400"
-       style="border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
-</div>
-
 <div style="display: flex; overflow-x: auto; gap: 16px; padding: 16px 0;">
-  <div style="flex: 0 0 auto; min-width: 300px; text-align: center;">
+  <div style="flex: 0 0 auto; min-width: 300px; text-align: left;">
     <img src="./images/1.png" style="height: 200px; border-radius: 8px;">
     <p>Spring bloom</p>
   </div>
