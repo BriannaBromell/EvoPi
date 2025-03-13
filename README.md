@@ -3,7 +3,35 @@
 A custom individual-creature focused evolutionary simulator with advanced genetics and optimized performance
 
 ## Simulation Preview 🔍
-## Simulation Preview 🔍
+
+<div style="position: relative; width: 100%; margin: 20px 0;">
+  <div style="display: flex; gap: 16px; overflow-x: auto; scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; padding-bottom: 16px;">    
+    <!-- Spring -->
+    <div style="flex: 0 0 calc(100% - 32px); scroll-snap-align: start; min-width: 300px; max-width: 600px; margin-right: 16px;">
+      <img src="./images/spring.png" 
+           style="width: 100%; height: 300px; object-fit: cover; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
+      <p style="text-align: center; color: #8b949e; margin-top: 8px;">Spring Bloom</p>
+    </div>
+    <!-- Summer -->
+    <div style="flex: 0 0 calc(100% - 32px); scroll-snap-align: start; min-width: 300px; max-width: 600px; margin-right: 16px;">
+      <img src="./images/summer.png"
+           style="width: 100%; height: 300px; object-fit: cover; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
+      <p style="text-align: center; color: #8b949e; margin-top: 8px;">Summer Abundance</p>
+    </div>
+    <!-- Autumn -->
+    <div style="flex: 0 0 calc(100% - 32px); scroll-snap-align: start; min-width: 300px; max-width: 600px; margin-right: 16px;">
+      <img src="./images/autumn.png"
+           style="width: 100%; height: 300px; object-fit: cover; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
+      <p style="text-align: center; color: #8b949e; margin-top: 8px;">Autumn Harvest</p>
+    </div>
+    <!-- Winter -->
+    <div style="flex: 0 0 calc(100% - 32px); scroll-snap-align: start; min-width: 300px; max-width: 600px;">
+      <img src="./images/winter.png"
+           style="width: 100%; height: 300px; object-fit: cover; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
+      <p style="text-align: center; color: #8b949e; margin-top: 8px;">Winter Survival</p>
+    </div>
+  </div>
+</div>
 
 <div style="display: flex; overflow-x: auto; gap: 16px; padding: 16px 0;">
   <div style="flex: 0 0 auto; min-width: 300px; text-align: left;">
