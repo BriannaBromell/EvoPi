@@ -11,6 +11,28 @@ A custom individual-creature focused evolutionary simulator with advanced geneti
        style="border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
 </div>
 
+<div style="display: flex; overflow-x: auto; gap: 16px; padding: 16px 0;">
+  <div style="flex: 0 0 auto; min-width: 300px; text-align: center;">
+    <img src="./images/1.png" style="height: 200px; border-radius: 8px;">
+    <p>Spring bloom</p>
+  </div>
+  
+  <div style="flex: 0 0 auto; min-width: 300px; text-align: center;">
+    <img src="./images/1.png" style="height: 200px; border-radius: 8px;">
+    <p>Summer abundance</p>
+  </div>
+  
+  <div style="flex: 0 0 auto; min-width: 300px; text-align: center;">
+    <img src="./images/1.png" style="height: 200px; border-radius: 8px;">
+    <p>Autumn harvest</p>
+  </div>
+  
+  <div style="flex: 0 0 auto; min-width: 300px; text-align: center;">
+    <img src="./images/1.png" style="height: 200px; border-radius: 8px;">
+    <p>Winter survival</p>
+  </div>
+</div>
+
 *Organisms interacting with food sources *
 
 ## Key Features 🔑
