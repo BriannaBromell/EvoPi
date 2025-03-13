@@ -9,19 +9,19 @@ A custom individual-creature focused evolutionary simulator with advanced geneti
     <!-- Screenshot 1 -->
     <div style="flex: 0 0 auto; min-width: calc(80% - 10px);">
       <img src="https://github.com/user-attachments/assets/5c5ba7dd-cb02-4c45-b6f4-479630bdbc30" 
-           style="border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); width: 100%;">
+           style="border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); width: 20%;">
       <p style="text-align: center; font-style: italic;">Organisms interacting in summer season</p>
     </div>    
     <!-- Screenshot 2 -->
     <div style="flex: 0 0 auto; min-width: calc(80% - 10px);">
-      <img src="[url-for-screenshot2](https://github.com/user-attachments/assets/5c5ba7dd-cb02-4c45-b6f4-479630bdbc30)" 
-           style="border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); width: 100%;">
+      <img src="(https://github.com/user-attachments/assets/5c5ba7dd-cb02-4c45-b6f4-479630bdbc30)" 
+           style="border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); width: 20%;">
       <p style="text-align: center; font-style: italic;">Winter food scarcity patterns</p>
     </div>    
     <!-- Screenshot 3 -->
     <div style="flex: 0 0 auto; min-width: calc(80% - 10px);">
-      <img src="[url-for-screenshot3](https://github.com/user-attachments/assets/5c5ba7dd-cb02-4c45-b6f4-479630bdbc30)" 
-           style="border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); width: 100%;">
+      <img src="(https://github.com/user-attachments/assets/5c5ba7dd-cb02-4c45-b6f4-479630bdbc30)" 
+           style="border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); width: 20%;">
       <p style="text-align: center; font-style: italic;">Mutation visualization</p>
     </div>
   </div>
