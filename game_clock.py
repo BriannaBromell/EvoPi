@@ -1,7 +1,3 @@
-import pygame
-
-
-
 class GameClock:
     def __init__(self, initial_time=0.0):
         self.total_time = initial_time  # Real seconds (1 sec = 1 game day)

@@ -45,7 +45,7 @@ def draw_organism_info(surface, organism):
         f"Energy: {int(organism.energy)}",
         f"Age: {int(organism.age)}s",
         f"Goal: {organism.current_goal}",
-        f"Genome:"
+        f"🧬 Genome:"
     ]
 
     # Dynamically add all genetic traits

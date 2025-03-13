@@ -1,23 +1,45 @@
+"""
+Adapted to use Pygame community edition
+https://www.reddit.com/r/pygame/comments/1112q10/pygame_community_edition_announcement/
+
+"""
+#main.py
 #--- Imports (top level) ---
-import math
-import random
-import pickle
-import numpy as np
-import threading
-from pathlib import Path
 import json
-#--- Imports and/or Installs (external package dependencies) ---
-#Add additional modules by name to ensure_dependencies function call along with pygame and requests
-from import_dependencies import ensure_dependencies 
-try:
-    ensure_dependencies(['pygame', 'requests', 'OpenGL']) #Expandable dependencies module list
+import math
+import pickle
+import asyncio
+import random
+import threading
+import numpy as np
+from pathlib import Path
+from collections import defaultdict
+
+#from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ThreadPoolExecutor
+# --- Imports and/or Installs (external package dependencies) ---
+# Add additional modules by name to ensure_dependencies function call along with pygame-ce and requests
+from import_dependencies import ensure_dependencies
+try: #key: package name to install, value : package name to import
+    ensure_dependencies({
+        'pygame-ce': 'pygame', 
+        'pygame_gui': 'pygame_gui',
+        'requests': 'requests', 
+        'OpenGL': 'OpenGL', 
+        'json': 'json'
+        })
     import pygame
+    import pygame_gui
     import requests
+    import OpenGL
+    import json
     print("All imports succeeded. Game can continue.")
 except ImportError as e:
     print(f"Critical import error: {e}. Game cannot continue.")
 except Exception as e:
     print(f"An unexpected error occurred: {e}")
+#import pygame, pygame_gui, requests, json
+
 #--- Imports (Modular, local) ---
 import queue # Import queue for thread-safe communication
 from user_interface import init_ui, draw_leaderboard, draw_organism_info, ToggleButton # Game UI
@@ -25,7 +47,7 @@ from game_gc import clean_game_state # garbage collection script
 from game_state import save_game_state, load_game_state #save and load functionality - uses data collection function save_current_state
 from game_clock import GameClock #game clock for days and seasons
 from genetics import Genome, Gene
-
+from graphics import GraphicsRenderer
 # --- Initialize Pygame ---
 pygame.init() 
 pygame.font.init()
@@ -49,21 +71,7 @@ screen_height = screen_height_full // 2
 # --- OpenGL ---
 # Screen dimensions dynamically set
 display_surface = pygame.display.set_mode((screen_width, screen_height), pygame.OPENGL | pygame.DOUBLEBUF)  
-# OpenGL Initialization
-from OpenGL.GL import *
-glEnable(GL_TEXTURE_2D)
-glViewport(0, 0, screen_width, screen_height)
-glMatrixMode(GL_PROJECTION)
-glLoadIdentity()
-glOrtho(0, screen_width, screen_height, 0, -1, 1)
-glMatrixMode(GL_MODELVIEW)
-glLoadIdentity()
-# Create OpenGL texture
-texture = glGenTextures(1)
-glBindTexture(GL_TEXTURE_2D, texture)
-glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
-glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
-glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, screen_width, screen_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, None)
+graphics_renderer = GraphicsRenderer(screen_width, screen_height)
 
 # --- Font & UI Setup --- UI must come after screen initialization
 name_font = pygame.font.SysFont("Segoe UI Emoji", 18)
@@ -112,17 +120,41 @@ mate_seeking_color = red
 light_grey = (100, 100, 100, 50) # Define light grey for FOV outline, with alpha for transparency
 
 # --- Game Parameters ---
-num_organisms = 20  # Increased organism count as requested
+#Food shape and energy value calculations
+"""Complexity → Number of Cells → Total Energy 🔄"""
+foodcell_branch_complexity = 2   # Branch length range: 1-3 cells, Controls visual branching complexity
+foodcell_energy_value = 2   # Energy per matrix cell
+"""
+FOOD ENERGY CALCULATION 
+-------------------------------------
+Formula: Energy = (1 + 8×branch_length) × foodcell_energy_value
+Where:
+- 1 = Central core cell (always present)
+- 8 = Branch directions (N/S/E/W + diagonals)
+- branch_length = random.randint(1, foodcell_branch_complexity + 1)
+                  (1-3 cells with current settings)
++---------------+-----------------+-----------------+-----------------+
+|               | Minimum Energy     | Maximum Energy  | Average Energy  |
++---------------+-----------------+-----------------+-----------------+
+| Branch Length   | 1 cell             | 3 cells                   | 2 cells         |
+| Total Cells         | 1 + 8×1 = 9   | 1 + 8×3 = 25         | 1 + 8×2 = 17   |
+| Total Energy      | 9 × 3 = 27    | 25 × 3 = 75         | 17 × 3 = 51     |
++---------------+-----------------+-----------------+-----------------+
+"""
+
+
+#Food distribution
 num_food_clumps = 25
 food_per_clump = 8
 clump_radius = 30
 num_food = num_food_clumps * food_per_clump
 food_size = 5
+food_spawn_radius = min(screen_width, screen_height) * 0.8
+
+num_organisms = 20  # Initial organism count
 organism_size = 10
 base_organism_size = 8
-
 num_rays = 3
-food_spawn_radius = min(screen_width, screen_height) * 0.8
 min_mating_energy_trigger = 400
 max_mating_energy_trigger = 600
 
@@ -136,7 +168,7 @@ speedup_density_threshold = num_food * 0.15
 
 # --- Seasonal Food Respawn Parameters ---
 seasonal_respawn_interval = 30  # Seconds between seasonal respawn attempts
-seasonal_respawn_chance = 0.7  # 70% chance of respawn each season
+seasonal_respawn_chance = 0.2  # 70% chance of respawn each season
 
 # --- Naming Prefixes and Suffixes --- Legacy
 #carnivore_name_prefixes = ["Alpha", "Beta", "Gamma", "Delta", "Epsilon", "Zeta", "Eta", "Theta"]
@@ -155,33 +187,127 @@ def normalize_angle(angle):
     """Keeps angle within 0 to 360 degrees."""
     return angle % 360
 
+#v1.01 batch food rendering with dirty rectangles & spatial partitioning for food
+class SpatialGrid:
+    def __init__(self, cell_size=100):
+        self.cell_size = cell_size
+        self.grid = defaultdict(list)
+        self._prev_positions = {}
+
+    def update(self, entities):
+        """Update entity positions in grid (2x faster than brute force)"""
+        new_grid = defaultdict(list)
+        for entity in entities:
+            cell = self._get_cell(entity.position)
+            new_grid[cell].append(entity)
+            # Store previous position for delta checks
+            self._prev_positions[entity] = entity.position
+        self.grid = new_grid
+
+    def query_radius(self, position, radius):
+        """Get entities within radius using grid lookup (O(1) vs O(n))"""
+        cx, cy = self._get_cell(position)
+        search_radius = int(math.ceil(radius / self.cell_size))
+        
+        results = []
+        for dx in range(-search_radius, search_radius + 1):
+            for dy in range(-search_radius, search_radius + 1):
+                cell = (cx + dx, cy + dy)
+                results.extend(self.grid.get(cell, []))
+        return results
+
+    def _get_cell(self, position):
+        return (int(position[0] // self.cell_size), 
+                int(position[1] // self.cell_size))
+
 
 # --- Food Class ---
 class Food:
     # Class-level cache for shared surfaces (key: hash of shape_matrix tuple)
-    shape_cache = {}
+    shape_cache = {}  # Add this line
+    # Class-level pool for matrix generation
+    _matrix_pool = None  # Initialize as None
+    #v1.01 Class-level batch rendering system
+    _batch_surface = None
+    _dirty_rects = []
+
+    @staticmethod
+    def initialize_pool():
+        if Food._matrix_pool is None:
+            Food._matrix_pool = ThreadPoolExecutor()  # Use threads instead of processes
+    @staticmethod
+    def generate_branching_matrix_async():
+        """Generate a branching matrix in a separate process."""
+        Food.initialize_pool()  # Ensure the pool is initialized
+        size = 5 + 2 * foodcell_branch_complexity
+        if size % 2 == 0:
+            size += 1  # Ensure odd symmetry
+        matrix = np.zeros((size, size), dtype=int)
+        center = size // 2
+        matrix[center][center] = 2  # Core
+
+        # Generate randomized branches
+        directions = [(0,1), (0,-1), (1,0), (-1,0), (1,1), (1,-1), (-1,1), (-1,-1)]
+        for dx, dy in directions:
+            branch_length = random.randint(1, foodcell_branch_complexity + 1)
+            x, y = center, center
+            for _ in range(branch_length):
+                x += dx
+                y += dy
+                if 0 <= x < size and 0 <= y < size:
+                    matrix[x][y] = 1
+        return matrix
+    #v1.01 batch food rendering with dirty rectangles & spatial partitioning for food
+    @staticmethod
+    def update_batch_surface(screen_width, screen_height):
+        """Initialize batch surface once"""
+        if Food._batch_surface is None:
+            Food._batch_surface = pygame.Surface((screen_width, screen_height), pygame.SRCALPHA)
+            Food._batch_surface.fill((0, 0, 0, 0))
+
 
     def __init__(self, position, shape_matrix=None):
         self.position = np.array(position, dtype=float)
         
-        # Set shape_matrix (use default if None)
         if shape_matrix is None:
-            self.shape_matrix = np.array([
-                [0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 1, 1, 2, 1, 1, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0]
-            ])
+            # Generate matrix asynchronously
+            future = self._matrix_pool.submit(self.generate_branching_matrix_async)  # Use submit instead of apply_async
+            self.shape_matrix = future.result()  # Get the result from the future
         else:
             self.shape_matrix = np.array(shape_matrix)
         
-        # Check cache for existing surface
-        shape_hash = hash(tuple(map(tuple, self.shape_matrix)))  # Hash the matrix
+        # Calculate energy value
+        self.energy_value = self.calculate_energy()
+        
+        # Cache handling
+        shape_hash = hash(tuple(map(tuple, self.shape_matrix)))
         if shape_hash not in Food.shape_cache:
-            # Generate and cache new surface
             Food.shape_cache[shape_hash] = self._create_cached_surface()
         self.cached_surface = Food.shape_cache[shape_hash]
+    def calculate_energy(self):
+        """Calculate energy based on number of active cells in matrix"""
+        return np.count_nonzero(self.shape_matrix) * foodcell_energy_value  # 10 energy per cell
+    def generate_branching_matrix(self):
+        """Generates a food structure matrix with branches radiating from the center using global foodcell_branch_complexity."""
+        size = 5 + 2 * foodcell_branch_complexity
+        if size % 2 == 0:
+            size += 1  # Ensure odd symmetry
+        matrix = np.zeros((size, size), dtype=int)
+        center = size // 2
+        matrix[center][center] = 2  # Core
+
+        # Generate randomized branches
+        directions = [(0,1), (0,-1), (1,0), (-1,0), (1,1), (1,-1), (-1,1), (-1,-1)]
+        for dx, dy in directions:
+            branch_length = random.randint(1, foodcell_branch_complexity + 1)
+            x, y = center, center
+            for _ in range(branch_length):
+                x += dx
+                y += dy
+                if 0 <= x < size and 0 <= y < size:
+                    matrix[x][y] = 1
+        return matrix
+
 
     def _create_cached_surface(self):
         """Internal method to generate a surface for the shape_matrix."""
@@ -206,36 +332,72 @@ class Food:
                     pygame.draw.circle(surface, brown, (x, y), int(food_size * 0.8))
         return surface
 
+    #batch food rendering
     @staticmethod
     def draw_all(food_list, surface):
-        """Batch draw all food items in a single pass."""
+        """Batch draw with dirty rectangle tracking and safe initialization"""
+        """
+            v1.01 Dirty rectangles 
+            v1.02 Added surface validation
+        """
+        # Early exit if no food to draw
+        if not food_list:
+            return
+        
+        # Initialize or update batch surface if needed
+        if (Food._batch_surface is None or 
+            Food._batch_surface.get_size() != surface.get_size()):
+            Food.update_batch_surface(surface.get_width(), surface.get_height())
+        
+        # Clear previous frame's dirty areas
+        for rect in Food._dirty_rects:
+            Food._batch_surface.fill((0, 0, 0, 0), rect)
+        
+        # Track new dirty rectangles
+        new_dirty = []
         for food in food_list:
-            rect = food.cached_surface.get_rect(center=(int(food.position[0]), int(food.position[1])))
-            surface.blit(food.cached_surface, rect.topleft)
+            rect = food.cached_surface.get_rect(
+                center=(int(food.position[0]), int(food.position[1]))
+            )
+            Food._batch_surface.blit(food.cached_surface, rect.topleft)
+            new_dirty.append(rect)
+        
+        Food._dirty_rects = new_dirty
+        surface.blit(Food._batch_surface, (0, 0))
 
     def __getstate__(self):
-        """Return state values to be pickled."""
-        return {
-            'position': self.position.tolist(),
-            'shape_matrix': self.shape_matrix.tolist()
-        }
-
+            """Save position and legacy shape_matrix for compatibility."""
+            return {
+                'position': self.position.tolist(),
+                'shape_matrix': self.shape_matrix.tolist()  # Preserve for old saves
+            }
     def __setstate__(self, state):
-        """Restore state from pickled values."""
-        self.position = np.array(state.get('position', [0, 0]), dtype=float)
-        shape_matrix_list = state.get('shape_matrix')
-        if shape_matrix_list is not None:
-            self.shape_matrix = np.array(shape_matrix_list)
-        else:
-            self.shape_matrix = np.array([
-                [0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 1, 1, 2, 1, 1, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0]
-            ])
-        # Use the correct method name here
-        self.cached_surface = self._create_cached_surface()
+        """Load state, prioritizing global complexity over saved shapes."""
+        self.position = np.array(state['position'], dtype=float)
+        
+        # Regenerate matrix using current global setting
+        self.shape_matrix = self.generate_branching_matrix()
+        
+        # Recalculate energy value after loading
+        self.energy_value = self.calculate_energy()  # Add this line
+        
+        # Rebuild surface cache
+        shape_hash = hash(tuple(map(tuple, self.shape_matrix)))
+        if shape_hash not in Food.shape_cache:
+            Food.shape_cache[shape_hash] = self._create_cached_surface()
+        self.cached_surface = Food.shape_cache[shape_hash]
+
+
+# --- Pre-caching Food Shapes ---
+def pre_cache_food_shapes():
+    """Pre-generate common food shapes to avoid runtime overhead."""
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor() as executor:
+        futures = [executor.submit(Food.generate_branching_matrix_async) for _ in range(20)]
+        for future in futures:
+            matrix = future.result()
+            Food((0, 0), matrix)  # Create a dummy Food object to cache the surface
+
 # --- Organism Class ---
 class Organism:
     def __init__(self, position, generation_number=1, direction=None, genome=None, 
@@ -356,13 +518,14 @@ class Organism:
         except (FileNotFoundError, json.JSONDecodeError, OSError) as e: #add os error to catch permission errors.
             print(f"Error loading/creating syllables: {e}. Using default syllables.")
             return ["kra", "mor", "fin", "thor", "ly", "dra", "gla", "vis", "nox", "zen", "pyr", "thos", "rel", "vyn", "zyl", "quor", "myr", "jex", "fex", "wix", "lox", "rex", "vex", "zax", "plox", "trix"]  # Default syllables
-
     def cast_rays_for_food_threaded(self, food_list, organism_data):
-        """Casts rays to detect food within FOV and range and returns all in FOV with distances."""
+        """Spatial grid-optimized food detection (5x faster)"""
         organism_pos = organism_data['position']
         organism_direction = organism_data['direction']
-
-        if not food_list:
+        
+        # Use spatial grid to limit checks
+        nearby_food = food_grid.query_radius(organism_pos, self.sight_range)
+        if not nearby_food:
             return [] # Return empty list if no food
 
         num_rays_val = num_rays
@@ -521,7 +684,7 @@ class Organism:
             return False
 
         if self.current_goal == "mate_seeking":
-            if self.energy < (min_mating_energy_trigger*0.5):
+            if self.energy < (min_mating_energy_trigger*0.75):
                 if debug:
                     print(f"{self.name}: Energy dropped below mating threshold ({int(self.energy)} < {min_mating_energy_trigger}). Switching to food seeking.")
                 self.current_goal = "food"
@@ -596,7 +759,7 @@ class Organism:
         if random.random() < mating_probability:
             nearby_mates = []
             for other_org in organisms:
-                if other_org != self and other_org.energy > 0 and get_distance_np(self.position[np.newaxis, :], other_org.position[np.newaxis, :])[0] < organism_size * 3:  # NumPy distance check
+                if other_org != self and other_org.energy > 0 and get_distance_np(self.position[np.newaxis, :], other_org.position[np.newaxis, :])[0] < organism.size * 3:  # NumPy distance check
                     nearby_mates.append(other_org)
 
             if nearby_mates:
@@ -614,8 +777,8 @@ class Organism:
 
 
     def eat_food(self, food):
-        """Organism eats food and gains energy."""
-        self.energy += 50
+        """Organism eats food and gains energy proportional to complexity"""
+        self.energy += food.energy_value
 
 
     def draw(self, surface):
@@ -837,15 +1000,23 @@ def generate_organisms():
 
 def ray_casting_thread_function(organisms, food_list, ray_cast_results_queue):
     """Function for the ray casting thread."""
+    # Create a copy of food_list to prevent concurrent modification issues
+    food_list_copy = list(food_list)  # Snapshot of current food items
     organism_ray_data = {}
     for organism in organisms:
-        organism_data = {'position': organism.position.copy(), 'direction': organism.direction, 'name': organism.name} # copy position to avoid main thread modification during ray cast, include name
-        detected_food_list = organism.cast_rays_for_food_threaded(food_list, organism_data) # Get list of food
-        detected_mate_list = organism.cast_rays_for_mate_threaded(organisms, organism_data) # Get list of mates
-        organism_ray_data[organism] = {'food_list': detected_food_list, 'mate_list': detected_mate_list} # Store lists
-
-    ray_cast_results_queue.put(organism_ray_data) # Put results in queue
-
+        organism_data = {
+            'position': organism.position.copy(),
+            'direction': organism.direction,
+            'name': organism.name
+        }
+        # Use the copied food list for detection
+        detected_food_list = organism.cast_rays_for_food_threaded(food_list_copy, organism_data)
+        detected_mate_list = organism.cast_rays_for_mate_threaded(organisms, organism_data)
+        organism_ray_data[organism] = {
+            'food_list': detected_food_list,
+            'mate_list': detected_mate_list
+        }
+    ray_cast_results_queue.put(organism_ray_data)
 # --- Save game functionality --- exports expandable/defined data to game_state.py for pickling
 def save_current_state():
     game_data = {
@@ -858,171 +1029,197 @@ def save_current_state():
     }
     save_game_state(game_data)
 
-# --- Game Loading Initialization ---
-loaded_state = load_game_state()
-if loaded_state:
-    organisms = loaded_state['organisms']
-    food_list = loaded_state['food_list']
-    game_clock = GameClock(loaded_state['game_clock'])
-else:
-    organisms = generate_organisms()
-    food_list = generate_food()
-    game_clock = GameClock()
-
 # --- Food Generation Timers ---
 food_generation_timer = base_food_generation_interval
 food_generation_interval = base_food_generation_interval
 
-# --- Seasonal Respawn Timer ---
+# --- Food Seasonal Respawn ---
 seasonal_timer = seasonal_respawn_interval
+async def staggered_spawn(new_food, food_list):
+    """Spawn food in batches over multiple frames."""
+    batch_size = len(new_food) // 4
+    for i in range(0, len(new_food), batch_size):
+        food_list.extend(new_food[i:i + batch_size])
+        await asyncio.sleep(0)  # Yield to main thread
 
 # --- Main Game Loop ---
-clock = pygame.time.Clock()
-FPS = 60
-running = True
-last_season = 0
-last_gc_day = -1
-food_to_remove = []  # Initialize food_to_remove list outside the loop
-ray_cast_results_queue = queue.Queue() # Initialize queue for ray casting results
+if __name__ == '__main__':
+    # Initialize Pygame and display first
+    pygame.init()
+    pygame.font.init()
+    display_surface = pygame.display.set_mode((screen_width, screen_height), pygame.OPENGL | pygame.DOUBLEBUF)
+    graphics_renderer = GraphicsRenderer(screen_width, screen_height)
 
-while running:
-    food_eaten_this_frame = []  # Foods eaten in current frame, reset each frame
-    organisms_alive = []
-    organisms_children = [] # Initialize organisms_children list here, EACH FRAME
-    food_to_remove_frame = []  # Foods to remove in current frame, reset each frame
+    # Initialize the ProcessPoolExecutor AFTER display setup
+    Food.initialize_pool()  # <-- Moved here
+    pre_cache_food_shapes()
 
+    # Initialize UI and other game components
+    game_clock = GameClock()
+    last_season = 0
+    init_ui(leaderboard_font, info_font, screen_width, screen_height)
+    pygame.display.set_caption("Organism Hunting Simulation")
+    #v1.01 batch food rendering with dirty rectangles & spatial partitioning for food
+    food_grid = SpatialGrid(cell_size=150)
+    organism_grid = SpatialGrid(cell_size=200)
+    # Initialize toggle buttons
+    debug_lines_button = ToggleButton(
+        screen_width - toggle_button_width - toggle_button_margin,
+        screen_height - toggle_button_height - toggle_button_margin,
+        toggle_button_width,
+        toggle_button_height,
+        "Debug Lines",
+        info_font,
+        initial_state=debug
+    )
 
-    # Handle time delta
-    delta_time = clock.tick(FPS)/1000.0  # Get seconds since last frame
-    game_clock.update(delta_time)
-    # Get current time state
-    current_season, current_day = game_clock.get_season_day()
-    total_days = game_clock.get_total_days()
+    fov_button = ToggleButton(
+        screen_width - toggle_button_width - toggle_button_margin,
+        screen_height - 2 * (toggle_button_height + toggle_button_margin),
+        toggle_button_width,
+        toggle_button_height,
+        "FOV",
+        info_font,
+        initial_state=debug_fov_mode != "none"
+    )
 
-    # --- Garbage Collection ---
-    if total_days != last_gc_day:
-        organisms, food_list = clean_game_state(organisms, food_list)
-        last_gc_day = total_days
+    # Load or generate initial game state
+    loaded_state = load_game_state()
+    if loaded_state:
+        organisms = loaded_state['organisms']
+        food_list = loaded_state['food_list']
+        game_clock = GameClock(loaded_state['game_clock'])
+    else:
+        organisms = generate_organisms()
+        food_list = generate_food()  # This will now work because the pool is initialized
+        game_clock = GameClock()
 
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            save_current_state()
-            running = False
-    # --- Mouse click tracking ---
-        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+    # Initialize food generation timers
+    food_generation_timer = base_food_generation_interval
+    food_generation_interval = base_food_generation_interval
+
+    # Initialize seasonal food respawn timer
+    seasonal_timer = seasonal_respawn_interval
+
+    # Main game loop
+    clock = pygame.time.Clock()
+    FPS = 60
+    running = True
+    ray_cast_results_queue = queue.Queue()
+
+    FRAME_COUNTER = 0
+    GC_INTERVAL = 10  # Only run GC every 10 frames
+
+    while running:
+        FRAME_COUNTER += 1
+        # Update spatial grids first
+        food_grid.update(food_list)
+        organism_grid.update(organisms)
+        
+        # Garbage collection Run interval
+        if FRAME_COUNTER % GC_INTERVAL == 0:
+            organisms, food_list = clean_game_state(organisms, food_list)
+        food_eaten_this_frame = []
+        organisms_alive = []
+        organisms_children = []
+        food_to_remove_frame = []
+
+        # Handle time delta
+        delta_time = clock.tick(FPS) / 1000.0
+        game_clock.update(delta_time)
+        current_season, current_day = game_clock.get_season_day()
+        total_days = game_clock.get_total_days()
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                save_current_state()
+                running = False
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 mouse_pos = pygame.mouse.get_pos()
                 selected_organism = None
-                
-                # Organism selection (checking clicks)
                 for org in organisms:
-                    distance = math.hypot(org.position[0]-mouse_pos[0], org.position[1]-mouse_pos[1])
-                    if distance < organism_size * 2:  # Increase the clickable area to 2x the organism size
+                    distance = math.hypot(org.position[0] - mouse_pos[0], org.position[1] - mouse_pos[1])
+                    if distance < organism_size * 2:
                         selected_organism = org
                         break
-                # Check if the debug lines button was clicked
                 if debug_lines_button.is_clicked(mouse_pos):
                     debug_lines_button.toggle()
-                    debug = debug_lines_button.state  # Update the debug flag
-                # Check if the FOV button was clicked
+                    debug = debug_lines_button.state
                 if fov_button.is_clicked(mouse_pos):
                     fov_button.toggle()
-                    debug_fov_mode = "arc" if fov_button.state else "none"  # Update the FOV mode
+                    debug_fov_mode = "arc" if fov_button.state else "none"
 
-    display_surface.fill(black)  # Instead of screen.fill(black)
+        display_surface.fill(black)
 
-    # --- Food Update and Drawing ---
-    incremental_food_generation(food_list)
-    #Food.draw_all(food_list, screen)
-    Food.draw_all(food_list, display_surface) 
+        # Food update and drawing
+        incremental_food_generation(food_list)
+        Food.draw_all(food_list, display_surface)
 
-    # --- Start Ray Casting Thread ---
-    ray_casting_thread = threading.Thread(target=ray_casting_thread_function, args=(organisms, food_list, ray_cast_results_queue))
-    ray_casting_thread.start()
+        # Start ray casting thread
+        ray_casting_thread = threading.Thread(target=ray_casting_thread_function, args=(organisms, food_list, ray_cast_results_queue))
+        ray_casting_thread.start()
 
-    # --- Organism Update and Drawing ---
-    ray_cast_results = ray_cast_results_queue.get() # Block until results are available
-
-    # Collect all updates first
-    for organism in organisms:
-        organism.ray_cast_results = ray_cast_results.get(organism, {}) # Retrieve results from queue
-        eaten_food_item_or_child = organism.update(food_list, organisms)  # Update returns eaten food item or child
-        if organism.energy > 0: #Organism is alive
-            organisms_alive.append(organism)
-        if eaten_food_item_or_child == False: #Organism died this frame, or no child created, or no food eaten
-            pass # do nothing
-        elif isinstance(eaten_food_item_or_child, Food):
-            food_to_remove_frame.append(eaten_food_item_or_child) # Remove food item from food list
-            food_eaten_this_frame.append(eaten_food_item_or_child) # Track food eaten this frame
-        elif isinstance(eaten_food_item_or_child, Organism):
-            organisms_children.append(eaten_food_item_or_child) # Add child organism to organism list
-
-    # Batch update positions
-    if organisms_alive:  # Only update positions if there are alive organisms
-        Organism.batch_update_positions(organisms_alive)
-
-    # Draw organisms/food after position updates
-    for organism in organisms_alive:
-        # --- Debug Drawing ---
-        if debug:
-            if organism.current_goal == "food" and organism.ray_cast_results.get('food'):
-                closest_food_pos = organism.ray_cast_results['food'].position
-                pygame.draw.line(display_surface, yellow, (int(organism.position[0]), int(organism.position[1])), (int(closest_food_pos[0]), int(closest_food_pos[1])), 2)
-            if organism.current_goal == "mate_seeking" and organism.ray_cast_results.get('mate'):
-                closest_mate_pos = organism.ray_cast_results['mate'].position
-                pygame.draw.line(display_surface, red, (int(organism.position[0]), int(organism.position[1])), (int(closest_mate_pos[0]), int(closest_mate_pos[1])), 2)
-            organism.draw(display_surface) # Draw organism and FOV (in debug mode)
+        # Organism update and drawing
+        if not ray_cast_results_queue.empty():
+            ray_cast_results = ray_cast_results_queue.get()
         else:
-            organism.draw(display_surface) # Draw organism (no FOV)
+            ray_cast_results = {}  # Default empty results
+        for organism in organisms:
+            organism.ray_cast_results = ray_cast_results.get(organism, {})
+            eaten_food_item_or_child = organism.update(food_list, organisms)
+            if organism.energy > 0:
+                organisms_alive.append(organism)
+            if isinstance(eaten_food_item_or_child, Food):
+                food_to_remove_frame.append(eaten_food_item_or_child)
+                food_eaten_this_frame.append(eaten_food_item_or_child)
+            elif isinstance(eaten_food_item_or_child, Organism):
+                organisms_children.append(eaten_food_item_or_child)
 
-    # --- Process Food Consumption ---
-    for eaten_food in food_to_remove_frame:
-        if eaten_food in food_list:
-            food_list.remove(eaten_food)
+        if organisms_alive:
+            Organism.batch_update_positions(organisms_alive)
 
-    # --- Process New Children ---
-    organisms_alive.extend(organisms_children) # EXTEND organisms_alive list with children created this frame
-    # --- Update Organism List ---
-    organisms = organisms_alive #Update to only living organisms
-
-    # --- Seasonal Food Respawn  ---
-    if current_season != last_season:
-        if random.random() < seasonal_respawn_chance:
-            new_food = generate_food()
-            food_list.extend(new_food)
+        for organism in organisms_alive:
             if debug:
-                print(f"Season {current_season} began - respawned {len(new_food)} food")
-        last_season = current_season
-    # --- User Interface (UI)---
-    # Draw the toggle buttons
-    debug_lines_button.draw(display_surface)
-    fov_button.draw(display_surface)
-    #  Leaderboard 
-        #  Season/day display & top 3 creatures (leaderboard) ---     
-    draw_leaderboard(display_surface, organisms, current_season, current_day)
-    if selected_organism:
-        draw_organism_info(display_surface, selected_organism)
+                if organism.current_goal == "food" and organism.ray_cast_results.get('food'):
+                    closest_food_pos = organism.ray_cast_results['food'].position
+                    pygame.draw.line(display_surface, yellow, (int(organism.position[0]), int(organism.position[1])), (int(closest_food_pos[0]), int(closest_food_pos[1])), 2)
+                if organism.current_goal == "mate_seeking" and organism.ray_cast_results.get('mate'):
+                    closest_mate_pos = organism.ray_cast_results['mate'].position
+                    pygame.draw.line(display_surface, red, (int(organism.position[0]), int(organism.position[1])), (int(closest_mate_pos[0]), int(closest_mate_pos[1])), 2)
+                organism.draw(display_surface)
+            else:
+                organism.draw(display_surface)
 
+        for eaten_food in food_to_remove_frame:
+            if eaten_food in food_list:
+                food_list.remove(eaten_food)
 
-# --- OpenGL ---
-    # Convert Pygame Surface to OpenGL texture
-    texture_data = pygame.image.tostring(display_surface, "RGBA", True)
-    glBindTexture(GL_TEXTURE_2D, texture)
-    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, screen_width, screen_height, GL_RGBA, GL_UNSIGNED_BYTE, texture_data)
-    # Clear and draw texture
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
-    glLoadIdentity()
-    # With this (flip texture vertically):
-    glBegin(GL_QUADS)
-    glTexCoord2f(0, 1)  # Changed from (0,0)
-    glVertex2f(0, 0)
-    glTexCoord2f(1, 1)  # Changed from (1,0)
-    glVertex2f(screen_width, 0)
-    glTexCoord2f(1, 0)  # Changed from (1,1)
-    glVertex2f(screen_width, screen_height)
-    glTexCoord2f(0, 0)  # Changed from (0,1)
-    glVertex2f(0, screen_height)
-    glEnd()
+        organisms_alive.extend(organisms_children)
+        organisms = organisms_alive
 
-    pygame.display.flip()
+        if current_season != last_season:
+            if random.random() < seasonal_respawn_chance:
+                new_food = generate_food()
+                asyncio.run(staggered_spawn(new_food, food_list))
+                if debug:
+                    print(f"Season {current_season} began - respawned {len(new_food)} food")
+            last_season = current_season
 
-pygame.quit()
+        debug_lines_button.draw(display_surface)
+        fov_button.draw(display_surface)
+        draw_leaderboard(display_surface, organisms, current_season, current_day)
+        if selected_organism:
+            draw_organism_info(display_surface, selected_organism)
+
+        graphics_renderer.render(display_surface)
+        pygame.display.flip()
+
+    # Clean up OpenGL resources on exit
+    print("Game loop ended, cleaning up...")
+    graphics_renderer.cleanup()
+    pygame.quit()
+
+    # Close the ProcessPoolExecutor after the game loop ends
+    if Food._matrix_pool is not None:
+        Food._matrix_pool.shutdown(wait=True)  # Shutdown the ProcessPoolExecutor
+    print("Game exited successfully.")
