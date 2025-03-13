@@ -2,10 +2,9 @@
 
 A custom individual-creature focused evolutionary simulator with advanced genetics and optimized performance
 
-![Screenshot 2025-03-10 162546](https://github.com/user-attachments/assets/5c5ba7dd-cb02-4c45-b6f4-479630bdbc30)
 <div align="center">
   <img src="https://github.com/user-attachments/assets/5c5ba7dd-cb02-4c45-b6f4-479630bdbc30"
-       width="800"
+       width="400"
        style="border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
 </div>
 ## Key Features 🔑
