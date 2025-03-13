@@ -1,28 +1,65 @@
-# EvoPi
-Evolution simulator<br> 
-  A custom individual-creature focused evolutionary simulor with basic UI. <br>
-    -4 seasons(minutes) separated by 60 days(seconds) as a game clock<br>
-    -Food blooms seasonally and sprinkles daily<br>
-    -Selectable creatures for view info purposes.<br>
-    -Prefix/Suffix name generation.<br>
-    -Stats are hereditary and include mutation rates.<br>
-    -Game persists between sessions unless save file is deleted, progress will not be lost.<br>
+# Evolution Simulator 🌱🧬
 
-Roadmap:<br>
-
-Strength, speed, etc., are currently directly modified during mating.<br>
-To make it more DNA-like, these traits should be derived from a genetic code. Each gene could be a value that influences multiple traits (pleiotropy), <br>
-and traits could be influenced by multiple genes (polygenic traits).
-<br>
-Species<br>
-Carnivores<br>
-Expanded food mechanisms<br>
-<br>
-<br>Gene expression<br>     Some genes only activate under certain conditions, like reaching a certain age or energy level
-<br>Epigenetics<br> Where environmental factors influence gene expression without changing the DNA. For example, if an organism experiences starvation, maybe its offspring have genes that make them more efficient at food utilization, even if their DNA is the same
-<br>
-<br>During mutation, instead of adjusting the trait directly, mutate the gene and then recalculate the trait based on the new gene value. This way, mutations are at the genetic level, and traits are expressions of genes
-<br>Genetic disorders    or beneficial mutations based on probability. Some mutations could be harmful, reducing fitness, while others could be beneficial.
-<br>Gene regulation networks<br>    how genes turn each other on or off. This could lead to emergent traits based on combinations of genes
+A custom individual-creature focused evolutionary simulator with advanced genetics and optimized performance
 
 ![Screenshot 2025-03-10 162546](https://github.com/user-attachments/assets/5c5ba7dd-cb02-4c45-b6f4-479630bdbc30)
+
+## Key Features 🔑
+
+### Core Simulation
+<br>🕒 **4-Season Time System** - Minutes=seasons, seconds=days with automatic food blooms<br>
+🌾 **Dynamic Food Ecosystem** - Seasonal respawning + daily sprinkles + cluster-based generation<br>
+👀 **Selectable Creatures** - Click any organism to view real-time stats and genetic makeup<br>
+🧠 **Smart Creature AI** - Food/mate seeking behaviors with FOV-based ray casting
+
+### Genetic System
+<br>🧬 **True DNA Simulation** - Genome/Gene class system with allele inheritance<br>
+🎲 **Mutations** - Configurable mutation rates (0.1-5%) with dominance factors<br>
+💞 **Sexual Reproduction** - Crossover breeding with trait combination<br>
+🌈 **Trait Expression** - Physical traits derived from genetic combinations<br>
+📜 **Epigenetic Effects** - Environmental factors influence gene activation
+
+### Technical Highlights
+<br>🚀 **Spatial Partitioning** - 150px grid system for 10x faster collision detection<br>
+🖥️ **OpenGL Rendering** - Batched texture rendering with GraphicsRenderer class<br>
+🧵 **Multithreaded Processing** - Async food generation and parallel ray casting<br>
+💾 **Persistent World** - Auto-saves progress between sessions
+
+### Advanced Mechanics
+<br>⚡ **Energy System** - Metabolism/size/speed tradeoffs with hunger dynamics<br>
+👓 **Vision System** - Customizable FOV (110-140°) and sight range (130-160px)<br>
+🍎 **Complex Food** - Branching food structures with variable energy values<br>
+📊 **Real-time UI** - Toggle debug overlays/FOV + leaderboard rankings
+
+### Creature Details
+<br>🔠 **Procedural Names** - Linguistically plausible name generation<br>
+⏳ **Aging System** - Lifespan (80-90s) with age-related stats<br>
+🎯 **Behavior States** - Food seeking/mating/wandering modes<br>
+👥 **Social Interactions** - Energy-based mating rituals
+
+## Roadmap 🗺️
+
+### Next Major Features
+<br>🦖 **Species System** - Carnivore/herbivore speciation<br>
+🌐 **Expanded Food Web** - Multiple food types with nutritional values<br>
+🧬 **Gene Regulation** - Activator/repressor gene networks
+
+### Genetic Expansion
+<br>🧩 **Pleiotropic Genes** - Single genes affecting multiple traits<br>
+🎭 **Polygenic Traits** - Combined gene effects on characteristics<br>
+⚠️ **Genetic Disorders** - Harmful mutation possibilities<br>
+🌡️ **Environmental DNA** - Temperature-dependent gene expression
+
+### Technical Upgrades
+<br>🌐 **Distributed Computing** - Offload simulation to GPU<br>
+📈 **Data Tracking** - Generational lineage graphs<br>
+🎮 **Interactive Evolution** - Player-directed breeding
+
+## Installation ⚙️
+
+```bash
+git clone https://github.com/yourusername/evolution-simulator.git
+cd evolution-simulator
+pip install -r requirements.txt
+python main.py
+```
