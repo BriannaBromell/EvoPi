@@ -7,6 +7,7 @@ A custom individual-creature focused evolutionary simulator with advanced geneti
        width="400"
        style="border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
 </div>
+
 ## Key Features 🔑
 
 ### Core Simulation
