@@ -66,7 +66,7 @@ A custom individual-creature focused evolutionary simulator with advanced geneti
 🎮 **Interactive Evolution** - Player-directed breeding
 
 ## Installation ⚙️
-
+Use the run.bat for easy install and run. It will do the following inside of your current directory:
 ```bash
 git clone https://github.com/yourusername/evolution-simulator.git
 cd evolution-simulator
