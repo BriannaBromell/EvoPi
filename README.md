@@ -3,29 +3,15 @@
 A custom individual-creature focused evolutionary simulator with advanced genetics and optimized performance
 
 ## Simulation Preview 🔍
+## Simulation Preview 🔍
 
-<div style="overflow-x: auto; white-space: nowrap; padding: 16px 0;">
-  <div style="display: flex; gap: 20px; padding-bottom: 10px;">
-    <!-- Screenshot 1 -->
-    <div style="flex: 0 0 auto; min-width: calc(80% - 10px);">
-      <img src="https://github.com/user-attachments/assets/5c5ba7dd-cb02-4c45-b6f4-479630bdbc30" 
-           style="border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); width: 20%;">
-      <p style="text-align: center; font-style: italic;">Organisms interacting in summer season</p>
-    </div>    
-    <!-- Screenshot 2 -->
-    <div style="flex: 0 0 auto; min-width: calc(80% - 10px);">
-      <img src="(https://github.com/user-attachments/assets/5c5ba7dd-cb02-4c45-b6f4-479630bdbc30)" 
-           style="border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); width: 20%;">
-      <p style="text-align: center; font-style: italic;">Winter food scarcity patterns</p>
-    </div>    
-    <!-- Screenshot 3 -->
-    <div style="flex: 0 0 auto; min-width: calc(80% - 10px);">
-      <img src="(https://github.com/user-attachments/assets/5c5ba7dd-cb02-4c45-b6f4-479630bdbc30)" 
-           style="border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); width: 20%;">
-      <p style="text-align: center; font-style: italic;">Mutation visualization</p>
-    </div>
-  </div>
+<div align="center">
+  <img src="https://github.com/user-attachments/assets/5c5ba7dd-cb02-4c45-b6f4-479630bdbc30"
+       width="400"
+       style="border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
 </div>
+
+*Organisms interacting with food sources *
 
 ## Key Features 🔑
 
