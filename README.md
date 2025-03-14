@@ -8,7 +8,6 @@ A custom individual-creature focused evolutionary simulator with advanced geneti
   <div style="flex: 0 0 auto; min-width: 300px; text-align: left;">
     <img src="./images/1.png" style="height: 200px; border-radius: 8px;">
     <img src="./images/2.png" style="height: 200px; border-radius: 8px;">
-    <img src="./images/3.png" style="height: 200px; border-radius: 8px;">
     <p> </p>
   </div>
 </div>

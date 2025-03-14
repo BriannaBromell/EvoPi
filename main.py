@@ -5,6 +5,7 @@ https://www.reddit.com/r/pygame/comments/1112q10/pygame_community_edition_announ
 """
 #main.py
 #--- Imports (top level) ---
+import gc
 import json
 import math
 import pickle
@@ -28,6 +29,8 @@ from game_state import save_game_state, load_game_state #save and load functiona
 from game_clock import GameClock #game clock for days and seasons
 from genetics import Genome, Gene
 from graphics import GraphicsRenderer
+
+ray_cast_executor = ThreadPoolExecutor(max_workers=4)
 # --- Initialize Pygame ---
 pygame.init() 
 pygame.font.init()
@@ -373,18 +376,14 @@ class Organism:
         # Dynamically set traits from genome
         for trait_name in self.genome.genes:
             setattr(self, trait_name, self.genome.get_trait(trait_name))
-        
         # Existing position/direction initialization
         self.position = np.array(position, dtype=float)
         self.direction = direction if direction is not None else random.uniform(0, 360)
-        
         # Modified energy calculation using metabolism
         self.energy = energy if energy is not None else 100 * self.metabolism
-        
         # Set color from genome
         self.base_color = base_color if base_color is not None else self.genome.get_color()
-        
-        # Rest of initialization remains the same
+
         self.generation_number = generation_number
         self.name = name if name is not None else self.generate_name()
         self.targeted_food = None
@@ -393,27 +392,30 @@ class Organism:
         self.last_direction_change_time = pygame.time.get_ticks()
         self.wander_turn_interval = random.uniform(1000, 3000)
         self.ray_cast_results = {}
-
-
+    # Vectorized Organism Updates:
     @staticmethod
     def batch_update_positions(organisms):
-        """Vectorized position update"""
+        if not organisms:
+            return
+        
+        # Vectorized position update
         directions = np.array([org.direction for org in organisms])
         speeds = np.array([org.speed for org in organisms])
         positions = np.array([org.position for org in organisms])
         
+        # Calculate movement vectors
         radians = np.radians(directions)
-        offsets = np.column_stack((
+        offsets = np.stack([
             np.cos(radians) * speeds,
             -np.sin(radians) * speeds
-        ))
+        ], axis=1)
         
+        # Update positions and energy
         new_positions = (positions + offsets) % [screen_width, screen_height]
-        
-        # Update individual organisms
         for i, org in enumerate(organisms):
             org.position = new_positions[i]
-            org.energy -= 0.1
+            org.energy -= org.metabolism * 0.01 * org.speed
+
 #--- Organis Naming conventions ---
     def generate_name(self):
         """Generates a pronounceable name with capitalization and single hyphen."""
@@ -1170,6 +1172,8 @@ if __name__ == '__main__':
         
         # Garbage collection Run interval
         if FRAME_COUNTER % GC_INTERVAL == 0:
+            gc.collect() #python garbage collection
+            #game garbage collection
             organisms, food_list = clean_game_state(organisms, food_list)
         food_eaten_this_frame = []
         organisms_alive = []
@@ -1213,11 +1217,10 @@ if __name__ == '__main__':
         # Food update and drawing first after events and clear
         incremental_food_generation(food_list)
         Food.draw_all(food_list, display_surface)
-
-        # Start ray casting thread
-        ray_casting_thread = threading.Thread(target=ray_casting_thread_function, args=(organisms, food_list, ray_cast_results_queue))
-        ray_casting_thread.start()
-
+        # Start ray casting (uses workers)
+        future = ray_cast_executor.submit(ray_casting_thread_function,
+                                        organisms, food_list, 
+                                        ray_cast_results_queue)
         # Organism update and drawing
         if not ray_cast_results_queue.empty():
             ray_cast_results = ray_cast_results_queue.get()
