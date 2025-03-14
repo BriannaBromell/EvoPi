@@ -12,6 +12,9 @@ A custom individual-creature focused evolutionary simulator with advanced geneti
     <p> </p>
   </div>
 </div>
+## Seeking Collaboration: GPU-Accelerated Evolution 🤝
+[Jump to GPU Acceleration Details](#gpu-acceleration-details)
+If you possess the skills and passion to contribute to this endeavor, I encourage you to reach out. Your expertise will be invaluable in pushing the boundaries of evolutionary simulation.
 
 ## Key Features 🔑
 
@@ -67,6 +70,7 @@ This sophisticated memory system allows creatures to learn from their environmen
 👥 **Social Interactions** - Energy-based mating rituals
 
 ## Roadmap 🗺️
+Performance is CPU dependent and it's being addressed
 
 ### Next Major Features
 <br>🦖 **Species System** - Carnivore/herbivore speciation<br>
@@ -91,3 +95,15 @@ git clone [https://github.com/yourusername/evolution-simulator.git](https://gith
 cd evolution-simulator
 pip install -r requirements.txt
 python main.py
+```
+<a id="gpu-acceleration-details"></a>
+## Planned GPU Acceleration Details 🚀
+**I am a solo developer and seeking collaborators with expertise in:**
+* **GPU Computing (CUDA, OpenCL, or similar):** Implementing core simulation logic on the GPU to leverage parallel processing capabilities.
+* **GPU-Based Game Engines (e.g., Unity with compute shaders, Unreal Engine):** Assisting in the migration to a robust, GPU-optimized game engine.
+* **Performance Optimization:** Identifying and addressing bottlenecks in GPU-accelerated simulations.
+* **Parallel Algorithms:** Implementing efficient parallel algorithms for complex simulations.
+**Benefits of GPU Acceleration:**
+* Significant performance gains, allowing for larger populations and more intricate simulations.
+* Improved visual fidelity and rendering capabilities.
+* Potential for real-time interactive simulations with complex environments.
