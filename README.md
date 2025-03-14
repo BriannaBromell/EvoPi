@@ -13,7 +13,6 @@ A custom individual-creature focused evolutionary simulator with advanced geneti
   </div>
 </div>
 
-
 ## Key Features 🔑
 
 ### Core Simulation
@@ -21,6 +20,26 @@ A custom individual-creature focused evolutionary simulator with advanced geneti
 🌾 **Dynamic Food Ecosystem** - Seasonal respawning + daily sprinkles + cluster-based generation<br>
 👀 **Selectable Creatures** - Click any organism to view real-time stats and genetic makeup<br>
 🧠 **Smart Creature AI** - Food/mate seeking behaviors with FOV-based ray casting
+
+### Cognitive Abilities 🧠
+
+Our creatures are not just driven by simple instincts; they possess advanced cognitive abilities that enhance their survival and adaptation:
+
+#### Advanced Memory System
+* 🧠 **Spatial Food Memory** - Creatures maintain a mental map using spatial hashing:
+    * 🗺️ **Grid-Based Recall** - 150px memory cells track historical food density
+    * 🕒 **Probabilistic Decay** - Memories fade exponentially (5% loss/sec) unless reinforced
+    * 🧭 **Smart Navigation** - Prioritize cells by density/distance/age using: `score = density × e^(-age/300) × (1 − distance/sight_range)`
+* 🎯 **Persistent Pathfinding**
+    * 🔄 **Target Locking** - Commit to navigation paths for minimum 2 second intervals
+    * 🧲 **Persistence Bonus** - 50% score boost when revisiting previous targets
+    * 🚦 **State Stability** - Require 3 consecutive food detections before goal switching
+* 🤝 **Social Memory Sharing**
+    * 💞 **Mating Knowledge Transfer** - Inherit partner's highest-density memories
+    * 🧩 **Memory Fusion** - Combine parental maps during reproduction
+    * 📡 **Epigenetic Weighting** - Recent memories influence gene activation
+
+This sophisticated memory system allows creatures to learn from their environment, optimize their foraging, and pass on valuable knowledge to their offspring, contributing to more intelligent and adaptable populations.
 
 ### Genetic System
 <br>🧬 **True DNA Simulation** - Genome/Gene class system with allele inheritance<br>
@@ -68,8 +87,7 @@ A custom individual-creature focused evolutionary simulator with advanced geneti
 ## Installation ⚙️
 
 ```bash
-git clone https://github.com/yourusername/evolution-simulator.git
+git clone [https://github.com/yourusername/evolution-simulator.git](https://github.com/yourusername/evolution-simulator.git)
 cd evolution-simulator
 pip install -r requirements.txt
 python main.py
-```
