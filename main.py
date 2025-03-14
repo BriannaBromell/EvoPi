@@ -42,7 +42,7 @@ except Exception as e:
 
 #--- Imports (Modular, local) ---
 import queue # Import queue for thread-safe communication
-from user_interface import init_ui, draw_leaderboard, draw_organism_info, ToggleButton # Game UI
+import user_interface
 from game_gc import clean_game_state # garbage collection script
 from game_state import save_game_state, load_game_state #save and load functionality - uses data collection function save_current_state
 from game_clock import GameClock #game clock for days and seasons
@@ -78,35 +78,8 @@ name_font = pygame.font.SysFont("Segoe UI Emoji", 18)
 leaderboard_font = pygame.font.SysFont("Segoe UI Emoji", 24)
 info_font = pygame.font.SysFont("Segoe UI Emoji", 16)
 selected_organism = None  # Add this with other game state variables
-init_ui(leaderboard_font, info_font, screen_width, screen_height)
 pygame.display.set_caption("Organism Hunting Simulation")
-# --- Initialize toggle buttons ---
-# Initialize the toggle buttons
-toggle_button_width = 120
-toggle_button_height = 30
-toggle_button_margin = 10
 
-# Button for toggling debug lines
-debug_lines_button = ToggleButton(
-    screen_width - toggle_button_width - toggle_button_margin,
-    screen_height - toggle_button_height - toggle_button_margin,
-    toggle_button_width,
-    toggle_button_height,
-    "Debug Lines",
-    info_font,
-    initial_state=debug  # Initial state matches the debug flag
-)
-
-# Button for toggling FOV drawing (optional)
-fov_button = ToggleButton(
-    screen_width - toggle_button_width - toggle_button_margin,
-    screen_height - 2 * (toggle_button_height + toggle_button_margin),
-    toggle_button_width,
-    toggle_button_height,
-    "FOV",
-    info_font,
-    initial_state=debug_fov_mode != "none"  # Initial state matches the FOV mode
-)
 # Colors
 white = (255, 255, 255)
 black = (0, 0, 0)
@@ -845,7 +818,7 @@ class Organism:
 
         # Organism class (inside the draw method)
         # --- 7. Debug FOV Drawing (Optimized) ---
-        if debug and debug_fov_mode != "none" and fov_button.state:  # Only draw FOV if the FOV button is active
+        if debug and debug_fov_mode != "none":  # Only draw FOV if the FOV button is active
             start_angle_deg = self.direction - self.sight_fov / 2
             end_angle_deg = self.direction + self.sight_fov / 2
             start_ray_rad = math.radians(start_angle_deg) # Calculate radians once
@@ -874,18 +847,17 @@ class Organism:
                 pygame.draw.lines(surface, light_grey, False, fov_arc_points, 1) # Draw FOV arc (reusing calculated points)
         # Organism class (inside the draw method)
         # --- 8. Debug Rays Drawing ---
-        if debug_lines_button.state:  # Only draw debug rays if the debug lines button is active
-            # Draw rays to detected food (green)
-            detected_food_list = self.ray_cast_results.get('food_list', [])
-            for food_info in detected_food_list:
-                food = food_info['food']
-                pygame.draw.line(surface, green, (int(self.position[0]), int(self.position[1])), (int(food.position[0]), int(food.position[1])), 1)
+        # Draw rays to detected food (green)
+        detected_food_list = self.ray_cast_results.get('food_list', [])
+        for food_info in detected_food_list:
+            food = food_info['food']
+            pygame.draw.line(surface, green, (int(self.position[0]), int(self.position[1])), (int(food.position[0]), int(food.position[1])), 1)
 
-            # Draw rays to detected mates (yellow)
-            detected_mate_list = self.ray_cast_results.get('mate_list', [])
-            for mate_info in detected_mate_list:
-                mate = mate_info['mate']
-                pygame.draw.line(surface, yellow, (int(self.position[0]), int(self.position[1])), (int(mate.position[0]), int(mate.position[1])), 1)    
+        # Draw rays to detected mates (yellow)
+        detected_mate_list = self.ray_cast_results.get('mate_list', [])
+        for mate_info in detected_mate_list:
+            mate = mate_info['mate']
+            pygame.draw.line(surface, yellow, (int(self.position[0]), int(self.position[1])), (int(mate.position[0]), int(mate.position[1])), 1)    
     def __getstate__(self):
         """Automatically capture all instance attributes except those derived from genome"""
         state = self.__dict__.copy()
@@ -1057,31 +1029,15 @@ if __name__ == '__main__':
     # Initialize UI and other game components
     game_clock = GameClock()
     last_season = 0
-    init_ui(leaderboard_font, info_font, screen_width, screen_height)
+    user_interface.UI_MANAGER, user_interface.VISION_BUTTON = user_interface.init_ui(
+        screen_width, 
+        screen_height
+    )
+    #user_interface.init_ui(leaderboard_font, info_font, screen_width, screen_height)
     pygame.display.set_caption("Organism Hunting Simulation")
     #v1.01 batch food rendering with dirty rectangles & spatial partitioning for food
     food_grid = SpatialGrid(cell_size=150)
     organism_grid = SpatialGrid(cell_size=200)
-    # Initialize toggle buttons
-    debug_lines_button = ToggleButton(
-        screen_width - toggle_button_width - toggle_button_margin,
-        screen_height - toggle_button_height - toggle_button_margin,
-        toggle_button_width,
-        toggle_button_height,
-        "Debug Lines",
-        info_font,
-        initial_state=debug
-    )
-
-    fov_button = ToggleButton(
-        screen_width - toggle_button_width - toggle_button_margin,
-        screen_height - 2 * (toggle_button_height + toggle_button_margin),
-        toggle_button_width,
-        toggle_button_height,
-        "FOV",
-        info_font,
-        initial_state=debug_fov_mode != "none"
-    )
 
     # Load or generate initial game state
     loaded_state = load_game_state()
@@ -1124,7 +1080,7 @@ if __name__ == '__main__':
         organisms_children = []
         food_to_remove_frame = []
 
-        # Handle time delta
+        # ---Handle time delta---
         delta_time = clock.tick(FPS) / 1000.0
         game_clock.update(delta_time)
         current_season, current_day = game_clock.get_season_day()
@@ -1134,6 +1090,20 @@ if __name__ == '__main__':
             if event.type == pygame.QUIT:
                 save_current_state()
                 running = False
+        # ---Process UI events first
+            user_interface.UI_MANAGER.process_events(event)            
+
+            if event.type == pygame.USEREVENT:
+                if event.user_type == pygame_gui.UI_BUTTON_PRESSED:
+                    if event.ui_element == user_interface.VISION_BUTTON:
+                        # Toggle debug modes
+                        debug = not debug
+                        debug_fov_mode = "arc" if debug else "none"
+                        user_interface.VISION_BUTTON.set_text(
+                            f'Creature Vision: {"On" if debug else "Off"}'
+                        )
+            
+            # Handle organism selection
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 mouse_pos = pygame.mouse.get_pos()
                 selected_organism = None
@@ -1142,16 +1112,9 @@ if __name__ == '__main__':
                     if distance < organism_size * 2:
                         selected_organism = org
                         break
-                if debug_lines_button.is_clicked(mouse_pos):
-                    debug_lines_button.toggle()
-                    debug = debug_lines_button.state
-                if fov_button.is_clicked(mouse_pos):
-                    fov_button.toggle()
-                    debug_fov_mode = "arc" if fov_button.state else "none"
-
+        # Clear screen after handling events
         display_surface.fill(black)
-
-        # Food update and drawing
+        # Food update and drawing first after events and clear
         incremental_food_generation(food_list)
         Food.draw_all(food_list, display_surface)
 
@@ -1204,13 +1167,26 @@ if __name__ == '__main__':
                 if debug:
                     print(f"Season {current_season} began - respawned {len(new_food)} food")
             last_season = current_season
-
-        debug_lines_button.draw(display_surface)
-        fov_button.draw(display_surface)
-        draw_leaderboard(display_surface, organisms, current_season, current_day)
+        # ---Handle UI last---
+        # Update UI
+        user_interface.UI_MANAGER.update(delta_time)
+        # Draw UI elements
+        user_interface.UI_MANAGER.draw_ui(display_surface)
+        user_interface.draw_leaderboard(
+            display_surface,
+            organisms,
+            current_season,
+            current_day,
+            leaderboard_font, 
+            info_font          
+        )        
         if selected_organism:
-            draw_organism_info(display_surface, selected_organism)
-
+            user_interface.draw_organism_info(
+                display_surface,
+                selected_organism,
+                info_font,     
+                screen_width    
+            )
         graphics_renderer.render(display_surface)
         pygame.display.flip()
 

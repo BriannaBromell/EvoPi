@@ -1,0 +1,16 @@
+{
+    "button": {
+        "font": {
+            "name": "segoeuiemoji",
+            "size": 16
+        },
+        "colours": {
+            "normal_text": "#FFFFFF",
+            "hovered_text": "#CCCCCC",
+            "active_text": "#888888",
+            "normal_border": "#FFFFFF",
+            "hovered_border": "#CCCCCC",
+            "active_border": "#888888"
+        }
+    }
+}
