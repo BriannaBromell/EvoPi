@@ -356,9 +356,20 @@ class Organism:
     def __init__(self, position, generation_number=1, direction=None, genome=None, 
                  energy=None, name=None, current_goal=None, base_color=None, 
                  organism_size=None, lifespan=None, age=None):
+
         # Initialize genome first
         self.genome = genome if genome is not None else Genome()
-        
+
+
+        #Memory config(config file in the future)
+        self.memory_grid = defaultdict(lambda: (0.0, 0.0))  # (cell_x, cell_y): (density_score, last_seen_time)
+        self.memory_decay_rate = 0.98  # Slower decay (from 0.95)
+        self.memory_cell_size = 75  # More granular cells (from 150)
+        self.current_cell_target = None
+        self.target_persistence = 0    
+        #Memory system
+        self.last_memory_check = pygame.time.get_ticks()  # Initialize memory check timer
+        self.current_cell_target = None  # Initialize current navigation target    
         # Dynamically set traits from genome
         for trait_name in self.genome.genes:
             setattr(self, trait_name, self.genome.get_trait(trait_name))
@@ -623,11 +634,20 @@ class Organism:
                 genome=child_genome,
                 base_color=child_genome.get_color()  # Use genome's color method
             )
+
+        # Share memories
+        for cell, (density, _) in other_parent.memory_grid.items():
+            current_density = self.memory_grid.get(cell, (0, 0))[0]
+            if density > current_density:
+                self.memory_grid[cell] = (density, pygame.time.get_ticks()/1000)
+        
         return child
     def update(self, food_list, organisms):
         """Update organism behavior based on current goal. Ray casting results are expected to be pre-calculated."""
+        #Update Memory
+        self._update_food_memory(food_list)
+        #Update Age
         self.age += 1/60
-
         if self.energy <= 0:
             return False
         if self.age >= self.lifespan:
@@ -666,24 +686,36 @@ class Organism:
                 self.targeted_food = None # Clear target if no food detected
                 self.current_goal = "wander"
                 return self.update(food_list, organisms)  # Re-run update for wander
-
         elif self.current_goal == "wander":
-            current_time = pygame.time.get_ticks()
-            if current_time - self.last_direction_change_time >= self.wander_turn_interval:
-                self.direction += random.uniform(-90, 90)  # Wider wander turns
-                self.direction = normalize_angle(self.direction)
-                self.last_direction_change_time = current_time
-                self.wander_turn_interval = random.uniform(1000, 3000)  # reset interval
+            # --- State Transition Stability ---
+            if self.current_cell_target:  # Continue existing navigation
+                self._navigate_to_cell(self.current_cell_target)
+                
+            # Only check for new targets every 2 seconds
+            if pygame.time.get_ticks() - self.last_memory_check > 2000:
+                best_cell = self._find_most_attractive_cell()
+                self.last_memory_check = pygame.time.get_ticks()  # Update the last check time
+                if best_cell:
+                    self.current_cell_target = best_cell
 
-            self.move_forward()
+            # Require 3 consecutive frames of food detection
             detected_food_list = self.ray_cast_results.get('food_list', []) # Check for food while wandering
-            if detected_food_list:
+            if len(detected_food_list) >= 3:  # More stable detection
                 closest_food_info = min(detected_food_list, key=lambda item: item['distance'])
-                closest_food = closest_food_info['food']
-                self.targeted_food = closest_food # Target food immediately when detected while wandering
+                self.targeted_food = closest_food_info['food']
                 self.current_goal = "food"
-                return self.update(food_list, organisms)  # Re-run update to switch to food seeking
+                self.current_cell_target = None
+                return
 
+            # Fallback to random wandering if no memory target
+            if not self.current_cell_target:
+                current_time = pygame.time.get_ticks()
+                if current_time - self.last_direction_change_time >= self.wander_turn_interval:
+                    self.direction += random.uniform(-90, 90)  # Wider wander turns
+                    self.direction = normalize_angle(self.direction)
+                    self.last_direction_change_time = current_time
+                    self.wander_turn_interval = random.uniform(1000, 3000)  # reset interval
+                self.move_forward()
 
         # Check for eating food (remains the same)
         eaten_food = None  # Track eaten food item
@@ -727,12 +759,91 @@ class Organism:
                 self.current_goal = "mate_seeking"
 
         return False  # No child created, no food eaten, organism is still alive
-
+    def _update_food_memory(self, food_list):
+        now = pygame.time.get_ticks() / 1000  # Current time in seconds
+        visible_cells = set()
+        
+        # Get cells in FOV using spatial grid
+        nearby_food = food_grid.query_radius(self.position, self.sight_range)
+        cell_density = defaultdict(int)
+        
+        for food in nearby_food:
+            cell_x = int(food.position[0] // self.memory_cell_size)
+            cell_y = int(food.position[1] // self.memory_cell_size)
+            cell_density[(cell_x, cell_y)] += 1
+            visible_cells.add((cell_x, cell_y))
+        
+        # Update memory with decay
+        for cell in visible_cells:
+            density = cell_density[cell] / (self.memory_cell_size**2)  # Density per pixel²
+            self.memory_grid[cell] = (density, now)
+        
+        # Decay old memories
+        for cell in list(self.memory_grid.keys()):
+            if cell not in visible_cells:
+                old_density, last_time = self.memory_grid[cell]
+                time_diff = now - last_time
+                decayed_density = old_density * (self.memory_decay_rate ** time_diff)
+                if decayed_density < 0.01:
+                    del self.memory_grid[cell]
+                else:
+                    self.memory_grid[cell] = (decayed_density, last_time)
 
     def eat_food(self, food):
         """Organism eats food and gains energy proportional to complexity"""
         self.energy += food.energy_value
 
+    def _find_most_attractive_cell(self):
+        now = pygame.time.get_ticks() / 1000
+        current_cell = (
+            int(self.position[0] // self.memory_cell_size),
+            int(self.position[1] // self.memory_cell_size)
+        )
+        
+        best_score = -1
+        best_cell = None
+        
+        # Iterate through all cells in memory
+        for (cell_x, cell_y), (density, last_seen) in self.memory_grid.items():
+            age = now - last_seen
+            distance = math.hypot(
+                (cell_x - current_cell[0]) * self.memory_cell_size,
+                (cell_y - current_cell[1]) * self.memory_cell_size
+            )
+            
+            # Calculate score with persistence bonus
+            score = density * math.exp(-age / 300) * (1 - distance / (self.sight_range * 1.5))
+            
+            # Add persistence bonus if revisiting the same cell
+            if (cell_x, cell_y) == self.current_cell_target:
+                score *= 1.5  # Bonus for revisiting the same cell
+            
+            # Track the best cell
+            if score > best_score:
+                best_score = score
+                best_cell = (cell_x, cell_y)
+        
+        return best_cell
+
+
+    def _navigate_to_cell(self, target_cell):
+        if self.current_cell_target != target_cell:
+            self.target_persistence = 0
+            self.current_cell_target = target_cell
+            
+        self.target_persistence += 1
+        
+        # Only recalculate direction every 10 frames
+        if self.target_persistence % 10 == 0:
+            target_pos = (
+                (target_cell[0] + random.uniform(0.3, 0.7)) * self.memory_cell_size,  # Fixed closing parenthesis
+                (target_cell[1] + random.uniform(0.3, 0.7)) * self.memory_cell_size   # Fixed closing parenthesis
+            )
+            angle = math.degrees(math.atan2(target_pos[1]-self.position[1], 
+                                  target_pos[0]-self.position[0]))
+            self.direction = normalize_angle(-angle)
+        
+        self.move_forward()
 
     def draw(self, surface):
         """Draw the organism and debug rays - Optimized Version."""
