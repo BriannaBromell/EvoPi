@@ -14,8 +14,8 @@ A custom individual-creature focused evolutionary simulator with advanced geneti
 </div>
 
 ## Seeking Collaboration: GPU-Accelerated Evolution 🤝
-
 [Jump to GPU Acceleration Details](#gpu-acceleration-details) <br>
+**I am a solo developer and seeking collaborators ** <br>
 If you possess the skills and passion to contribute to this endeavor, I encourage you to reach out. Your expertise will be invaluable in pushing the boundaries of evolutionary simulation.
 
 ## Key Features 🔑
