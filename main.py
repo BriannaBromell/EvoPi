@@ -108,6 +108,8 @@ food_size = 5
 food_spawn_radius = min(screen_width, screen_height) * 0.8
 
 num_organisms = 20  # Initial organism count
+
+
 organism_size = 10
 base_organism_size = 8
 num_rays = 3
@@ -392,6 +394,7 @@ class Organism:
         self.last_direction_change_time = pygame.time.get_ticks()
         self.wander_turn_interval = random.uniform(1000, 3000)
         self.ray_cast_results = {}
+        self.food_not_detected_counter=0
     # Vectorized Organism Updates:
     @staticmethod
     def batch_update_positions(organisms):
@@ -484,14 +487,18 @@ class Organism:
         except (FileNotFoundError, json.JSONDecodeError, OSError) as e: #add os error to catch permission errors.
             print(f"Error loading/creating syllables: {e}. Using default syllables.")
             return ["kra", "mor", "fin", "thor", "ly", "dra", "gla", "vis", "nox", "zen", "pyr", "thos", "rel", "vyn", "zyl", "quor", "myr", "jex", "fex", "wix", "lox", "rex", "vex", "zax", "plox", "trix"]  # Default syllables
-    def cast_rays_for_food_threaded(self, food_list, organism_data):
+    def cast_rays_for_food_threaded(self, food_list_snapshot, organism_data):
         """Spatial grid-optimized food detection (5x faster)"""
         organism_pos = organism_data['position']
         organism_direction = organism_data['direction']
         
         # Use spatial grid to limit checks
+        # Use spatial grid with current food list
         nearby_food = food_grid.query_radius(organism_pos, self.sight_range)
-        if not nearby_food:
+        # Filter against actual snapshot
+        valid_food = [food for food in nearby_food if food in food_list_snapshot]
+
+        if not valid_food:
             return [] # Return empty list if no food
 
         num_rays_val = num_rays
@@ -506,12 +513,16 @@ class Organism:
         food_positions = np.array([food.position for food in food_list])
         distances_to_food = get_distance_np(organism_pos[np.newaxis, :], food_positions)
 
-        # --- Angle to Food Calculation - RE-EXAMINE THIS ---
-        angles_to_food = -np.degrees(np.arctan2(food_positions[:, 1] - organism_pos[1], food_positions[:, 0] - organism_pos[0]))
-        # --- Angle Difference Calculation - RE-EXAMINE THIS ---
-        angle_diffs = (angles_to_food - organism_direction) % 360
-        angle_differences = np.where(angle_diffs > 180, 360 - angle_diffs, angle_diffs)
+        # --- Angle to Food Calculation ---Angle negation is correct
+        #angles_to_food = -np.degrees(np.arctan2(food_positions[:, 1] - organism_pos[1], food_positions[:, 0] - organism_pos[0]))
+        angles_to_food = np.degrees(np.arctan2(organism_pos[1] - food_positions[:, 1], 
+            food_positions[:, 0] - organism_pos[0]))
+        # --- Angle Difference Calculation ---
+        #angle_diffs = (angles_to_food - organism_direction) % 360
+        #angle_differences = np.where(angle_diffs > 180, 360 - angle_diffs, angle_diffs)
 
+        angle_diffs = (angles_to_food - organism_direction) % 360
+        angle_differences = np.minimum(angle_diffs, 360 - angle_diffs)  # Always get smallest difference
         food_in_fov_mask = (distances_to_food <= self.sight_range) & (angle_differences <= self.sight_fov / 2)
         food_in_fov_indices = np.where(food_in_fov_mask)[0]
 
@@ -566,7 +577,7 @@ class Organism:
             angle_diff = normalize_angle(angle_to_food_degrees - self.direction)
             if angle_diff > 180:
                 angle_diff -= 360
-            turn_rate = 10  # Degrees per frame - Keep moderate turn rate for now
+            turn_rate = 25  # Degrees per frame - Keep moderate turn rate for now
             self.direction += max(-turn_rate, min(turn_rate, angle_diff))
             self.direction = normalize_angle(self.direction)
             self.move_forward()
@@ -675,8 +686,11 @@ class Organism:
                 self.move_forward()  # Keep moving in mate seeking, no wandering
 
         elif self.current_goal == "food":
+            """Food detection uses a counter for persistence"""
             detected_food_list = self.ray_cast_results.get('food_list', []) # Get list of detected food
             if detected_food_list:
+                # Reset counter immediately upon detection
+                self.food_not_detected_counter = 0  # <-- ADD THIS LINE
                 closest_food_info = min(detected_food_list, key=lambda item: item['distance'])
                 closest_food = closest_food_info['food']
 
@@ -685,8 +699,12 @@ class Organism:
                 self.hunt_food(self.targeted_food) # Hunt the *targeted* food
 
             else:
-                self.targeted_food = None # Clear target if no food detected
-                self.current_goal = "wander"
+                # Require consecutive misses before switching
+                self.food_not_detected_counter += 1
+                if self.food_not_detected_counter >= 5:  # 5 frames of no detection
+                    self.targeted_food = None
+                    self.current_goal = "wander"
+                    self.food_not_detected_counter = 0
                 return self.update(food_list, organisms)  # Re-run update for wander
         elif self.current_goal == "wander":
             # --- State Transition Stability ---
@@ -917,7 +935,12 @@ class Organism:
             start_ray_rad = math.radians(start_angle_deg) # Calculate radians once
             end_ray_rad = math.radians(end_angle_deg)   # Calculate radians once
 
-            fov_start_point = (self.position[0] + math.cos(start_ray_rad) * self.sight_range, self.position[1] - math.sin(start_ray_rad) * self.sight_range)
+            #fov_start_point = (self.position[0] + math.cos(start_ray_rad) * self.sight_range, self.position[1] - math.sin(start_ray_rad) * self.sight_range)
+            fov_start_point = (
+                self.position[0] + math.cos(math.radians(start_angle_deg)) * self.sight_range,
+                self.position[1] + math.sin(math.radians(start_angle_deg)) * self.sight_range  # Positive Y direction
+            )
+
             fov_end_point = (self.position[0] + math.cos(end_ray_rad) * self.sight_range, self.position[1] - math.sin(end_ray_rad) * self.sight_range)
 
             fov_arc_points = [] # Initialize once outside the if/elif blocks
@@ -965,7 +988,7 @@ class Organism:
         # Keep these special attributes that aren't genome-derived
         keep_attrs = ['genome', 'position', 'direction', 'energy', 'generation_number',
                      'name', 'current_goal', 'base_color', 'age', 'last_direction_change_time',
-                     'wander_turn_interval', 'targeted_food', 'ray_cast_results']
+                     'wander_turn_interval', 'targeted_food', 'ray_cast_results', 'food_not_detected_counter']
         
         return {k: v for k, v in state.items() if k in keep_attrs}
     def __setstate__(self, state):
@@ -991,7 +1014,8 @@ class Organism:
             'memory_grid': defaultdict(lambda: (0.0, 0.0)),
             'current_cell_target': None,
             'target_persistence': 0,
-            'last_memory_check': pygame.time.get_ticks()
+            'last_memory_check': pygame.time.get_ticks(),
+            'food_not_detected_counter': 0
         }
         for attr, default in defaults.items():
             if not hasattr(self, attr):
@@ -1068,10 +1092,9 @@ def generate_organisms():
         organisms.append(Organism(pos))
     return organisms
 
-def ray_casting_thread_function(organisms, food_list, ray_cast_results_queue):
+def ray_casting_thread_function(organisms, food_list_snapshot, ray_cast_results_queue):
     """Function for the ray casting thread."""
-    # Create a copy of food_list to prevent concurrent modification issues
-    food_list_copy = list(food_list)  # Snapshot of current food items
+    """Use synchronized food list snapshot"""
     organism_ray_data = {}
     for organism in organisms:
         organism_data = {
@@ -1079,8 +1102,8 @@ def ray_casting_thread_function(organisms, food_list, ray_cast_results_queue):
             'direction': organism.direction,
             'name': organism.name
         }
-        # Use the copied food list for detection
-        detected_food_list = organism.cast_rays_for_food_threaded(food_list_copy, organism_data)
+        # Use synchronized snapshot instead of copying within thread
+        detected_food_list = organism.cast_rays_for_food_threaded(food_list_snapshot, organism_data)
         detected_mate_list = organism.cast_rays_for_mate_threaded(organisms, organism_data)
         organism_ray_data[organism] = {
             'food_list': detected_food_list,
@@ -1114,96 +1137,122 @@ async def staggered_spawn(new_food, food_list):
 
 # --- Main Game Loop ---
 if __name__ == '__main__':
-    # Initialize Pygame and display first
+    # ==== Phase 1 - Initialization ====
+    # Initialize core game systems and resources
+    # ==================================
+    
+    # Pygame and graphics setup
     pygame.init()
     pygame.font.init()
     display_surface = pygame.display.set_mode((screen_width, screen_height), pygame.OPENGL | pygame.DOUBLEBUF)
     graphics_renderer = GraphicsRenderer(screen_width, screen_height)
 
-    # Initialize the ProcessPoolExecutor AFTER display setup
-    Food.initialize_pool()  # <-- Moved here
-    pre_cache_food_shapes()
+    # Food system initialization
+    Food.initialize_pool()  # Process pool for food generation
+    pre_cache_food_shapes()  # Pre-generate food shapes
 
-    # Initialize UI and other game components
+    # Game systems setup
     game_clock = GameClock()
     last_season = 0
+    
+    # UI system initialization
     user_interface.UI_MANAGER, user_interface.VISION_BUTTON = user_interface.init_ui(
         screen_width, 
         screen_height
     )
-    #user_interface.init_ui(leaderboard_font, info_font, screen_width, screen_height)
     pygame.display.set_caption("Organism Hunting Simulation")
-    #v1.01 batch food rendering with dirty rectangles & spatial partitioning for food
-    food_grid = SpatialGrid(cell_size=150)
-    organism_grid = SpatialGrid(cell_size=200)
 
-    # Load or generate initial game state
+    # Spatial partitioning systems
+    food_grid = SpatialGrid(cell_size=150)  # Optimized food queries
+    organism_grid = SpatialGrid(cell_size=200)  # Optimized organism queries
+
+    # ==== Phase 2 - Game State Loading ====
+    # Load saved state or generate initial state
+    # ========================================
     loaded_state = load_game_state()
     if loaded_state:
+        # Restore from save file
         organisms = loaded_state['organisms']
         food_list = loaded_state['food_list']
         game_clock = GameClock(loaded_state['game_clock'])
     else:
+        # Create new game state
         organisms = generate_organisms()
-        food_list = generate_food()  # This will now work because the pool is initialized
+        food_list = generate_food()
         game_clock = GameClock()
 
-    # Initialize food generation timers
+    # Timer initialization
     food_generation_timer = base_food_generation_interval
-    food_generation_interval = base_food_generation_interval
-
-    # Initialize seasonal food respawn timer
     seasonal_timer = seasonal_respawn_interval
 
-    # Main game loop
+    # ==== Phase 3 - Main Loop Setup ====
+    # Prepare runtime variables and systems
+    # ====================================
     clock = pygame.time.Clock()
     FPS = 60
     running = True
-    ray_cast_results_queue = queue.Queue()
-
+    ray_cast_results_queue = queue.Queue()  # For async ray casting results
     FRAME_COUNTER = 0
-    GC_INTERVAL = 10  # Only run GC every 10 frames
+    GC_INTERVAL = 10  # Garbage collection interval
 
+    # ==== Phase 4 - Game Loop Execution ====
+    # Core game loop running at target FPS
+    # =======================================
     while running:
         FRAME_COUNTER += 1
-        # Update spatial grids first
+
+        # ==== Phase 4.1 - Spatial System Update ====
+        # Update spatial partitioning grids
+        # ==========================================
         food_grid.update(food_list)
         organism_grid.update(organisms)
-        
-        # Garbage collection Run interval
+
+        # ==== Phase 4.2 - Memory Management ====
+        # Perform garbage collection at intervals
+        # =======================================
         if FRAME_COUNTER % GC_INTERVAL == 0:
-            gc.collect() #python garbage collection
-            #game garbage collection
-            organisms, food_list = clean_game_state(organisms, food_list)
+            gc.collect()  # Python garbage collection
+            organisms, food_list = clean_game_state(organisms, food_list)  # Game-specific cleanup
+
+        # ==== Phase 4.3 - Frame Data Reset ====
+        # Initialize frame-specific containers
+        # ======================================
         food_eaten_this_frame = []
         organisms_alive = []
         organisms_children = []
         food_to_remove_frame = []
 
-        # ---Handle time delta---
+        # ==== Phase 4.4 - Time Management ====
+        # Update game clock and seasonal system
+        # =====================================
         delta_time = clock.tick(FPS) / 1000.0
         game_clock.update(delta_time)
         current_season, current_day = game_clock.get_season_day()
         total_days = game_clock.get_total_days()
 
+        # ==== Phase 4.5 - Input Handling ====
+        # Process system and user input events
+        # ====================================
         for event in pygame.event.get():
+            # Window closure handling
             if event.type == pygame.QUIT:
                 save_current_state()
                 running = False
-        # ---Process UI events first
-            user_interface.UI_MANAGER.process_events(event)            
 
+            # UI event processing
+            user_interface.UI_MANAGER.process_events(event)
+
+            # Vision toggle button
             if event.type == pygame.USEREVENT:
                 if event.user_type == pygame_gui.UI_BUTTON_PRESSED:
                     if event.ui_element == user_interface.VISION_BUTTON:
-                        # Toggle debug modes
                         debug = not debug
                         debug_fov_mode = "arc" if debug else "none"
                         user_interface.VISION_BUTTON.set_text(
                             f'Creature Vision: {"On" if debug else "Off"}'
                         )
             
-            # Handle organism selection
+            # Organism selection handling
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 mouse_pos = pygame.mouse.get_pos()
                 selected_organism = None
@@ -1212,53 +1261,87 @@ if __name__ == '__main__':
                     if distance < organism_size * 2:
                         selected_organism = org
                         break
-        # Clear screen after handling events
+
+        # ==== Phase 4.6 - Rendering Prep ====
+        # Clear screen and update food
+        # =============================
         display_surface.fill(black)
-        # Food update and drawing first after events and clear
         incremental_food_generation(food_list)
         Food.draw_all(food_list, display_surface)
-        # Start ray casting (uses workers)
-        future = ray_cast_executor.submit(ray_casting_thread_function,
-                                        organisms, food_list, 
-                                        ray_cast_results_queue)
-        # Organism update and drawing
-        if not ray_cast_results_queue.empty():
-            ray_cast_results = ray_cast_results_queue.get()
-        else:
-            ray_cast_results = {}  # Default empty results
+
+        # ==== Phase 4.7 - Async Processing ====
+        # Start parallel ray casting tasks
+        # ======================================
+        if FRAME_COUNTER % 2 == 0:  # Process ray casting every other frame
+            # Take synchronized snapshot AFTER food removal
+            food_list_snapshot = list(food_list)
+            organism_list_snapshot = list(organisms)
+            future = ray_cast_executor.submit(
+                ray_casting_thread_function,
+                organism_list_snapshot,
+                food_list_snapshot,
+                ray_cast_results_queue
+            )
+        # ==== Phase 4.8 - Organism Simulation ====
+        # Update all organism behaviors and states
+        # ========================================
+        # Process ray casting results
+        ray_cast_results = ray_cast_results_queue.get() if not ray_cast_results_queue.empty() else {}
+
+        # Update each organism
         for organism in organisms:
             organism.ray_cast_results = ray_cast_results.get(organism, {})
-            eaten_food_item_or_child = organism.update(food_list, organisms)
+            result = organism.update(food_list, organisms)
+            
+            # Track alive organisms
             if organism.energy > 0:
                 organisms_alive.append(organism)
-            if isinstance(eaten_food_item_or_child, Food):
-                food_to_remove_frame.append(eaten_food_item_or_child)
-                food_eaten_this_frame.append(eaten_food_item_or_child)
-            elif isinstance(eaten_food_item_or_child, Organism):
-                organisms_children.append(eaten_food_item_or_child)
+            
+            # Handle interaction results
+            if isinstance(result, Food):
+                food_to_remove_frame.append(result)
+                food_eaten_this_frame.append(result)
+            elif isinstance(result, Organism):
+                organisms_children.append(result)
 
+        # Batch process movement
         if organisms_alive:
             Organism.batch_update_positions(organisms_alive)
 
+        # ==== Phase 4.9 - Organism Rendering ====
+        # Draw all visible organisms
+        # ==========================
         for organism in organisms_alive:
+            # Debug visualization
             if debug:
                 if organism.current_goal == "food" and organism.ray_cast_results.get('food'):
                     closest_food_pos = organism.ray_cast_results['food'].position
-                    pygame.draw.line(display_surface, yellow, (int(organism.position[0]), int(organism.position[1])), (int(closest_food_pos[0]), int(closest_food_pos[1])), 2)
+                    pygame.draw.line(display_surface, yellow, 
+                                   (int(organism.position[0]), int(organism.position[1])), 
+                                   (int(closest_food_pos[0]), int(closest_food_pos[1])), 2)
                 if organism.current_goal == "mate_seeking" and organism.ray_cast_results.get('mate'):
                     closest_mate_pos = organism.ray_cast_results['mate'].position
-                    pygame.draw.line(display_surface, red, (int(organism.position[0]), int(organism.position[1])), (int(closest_mate_pos[0]), int(closest_mate_pos[1])), 2)
-                organism.draw(display_surface)
-            else:
-                organism.draw(display_surface)
+                    pygame.draw.line(display_surface, red, 
+                                   (int(organism.position[0]), int(organism.position[1])), 
+                                   (int(closest_mate_pos[0]), int(closest_mate_pos[1])), 2)
+            
+            # Actual organism drawing
+            organism.draw(display_surface)
 
+        # ==== Phase 4.10 - Food Management ====
+        # Update food state and seasonal respawn
+        # ======================================
+        # Remove eaten food
         for eaten_food in food_to_remove_frame:
             if eaten_food in food_list:
                 food_list.remove(eaten_food)
+        food_grid.update(food_list)
 
+        # Add new organisms
         organisms_alive.extend(organisms_children)
         organisms = organisms_alive
 
+        # Seasonal food respawn
         if current_season != last_season:
             if random.random() < seasonal_respawn_chance:
                 new_food = generate_food()
@@ -1266,11 +1349,14 @@ if __name__ == '__main__':
                 if debug:
                     print(f"Season {current_season} began - respawned {len(new_food)} food")
             last_season = current_season
-        # ---Handle UI last---
-        # Update UI
+
+        # ==== Phase 4.11 - UI Rendering ====
+        # Update and draw user interface
+        # ===============================
         user_interface.UI_MANAGER.update(delta_time)
-        # Draw UI elements
         user_interface.UI_MANAGER.draw_ui(display_surface)
+        
+        # Leaderboard and organism info
         user_interface.draw_leaderboard(
             display_surface,
             organisms,
@@ -1286,15 +1372,21 @@ if __name__ == '__main__':
                 info_font,     
                 screen_width    
             )
+
+        # ==== Phase 4.12 - Final Rendering ====
+        # Push frame to display
+        # =====================
         graphics_renderer.render(display_surface)
         pygame.display.flip()
 
-    # Clean up OpenGL resources on exit
+    # ==== Phase 5 - Cleanup ====
+    # Shutdown systems and release resources
+    # ======================================
     print("Game loop ended, cleaning up...")
+    ray_cast_executor.shutdown(wait=False)
     graphics_renderer.cleanup()
-    pygame.quit()
-
-    # Close the ProcessPoolExecutor after the game loop ends
     if Food._matrix_pool is not None:
-        Food._matrix_pool.shutdown(wait=True)  # Shutdown the ProcessPoolExecutor
+        Food._matrix_pool.shutdown(wait=False)
+
+    pygame.quit()
     print("Game exited successfully.")
