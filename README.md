@@ -21,7 +21,7 @@ If you possess the skills and passion to contribute to this endeavor, I encourag
 ## Key Features 🔑
 
 ### Core Simulation
-<br>🕒 **4-Season Time System** - Minutes=seasons, seconds=days with automatic food blooms<br>
+🕒 **4-Season Time System** - Minutes=seasons, seconds=days with automatic food blooms<br>
 🌾 **Dynamic Food Ecosystem** - Seasonal respawning + daily sprinkles + cluster-based generation<br>
 👀 **Selectable Creatures** - Click any organism to view real-time stats and genetic makeup<br>
 🧠 **Smart Creature AI** - Food/mate seeking behaviors with FOV-based ray casting
