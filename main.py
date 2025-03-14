@@ -966,7 +966,6 @@ class Organism:
                      'wander_turn_interval', 'targeted_food', 'ray_cast_results']
         
         return {k: v for k, v in state.items() if k in keep_attrs}
-
     def __setstate__(self, state):
         """Restore state dynamically"""
         # Restore basic attributes
@@ -984,7 +983,13 @@ class Organism:
         defaults = {
             'ray_cast_results': {},
             'targeted_food': None,
-            'wander_turn_interval': random.uniform(1000, 3000)
+            'wander_turn_interval': random.uniform(1000, 3000),
+            'memory_cell_size': 75,  # Added missing memory attributes
+            'memory_decay_rate': 0.98,
+            'memory_grid': defaultdict(lambda: (0.0, 0.0)),
+            'current_cell_target': None,
+            'target_persistence': 0,
+            'last_memory_check': pygame.time.get_ticks()
         }
         for attr, default in defaults.items():
             if not hasattr(self, attr):
