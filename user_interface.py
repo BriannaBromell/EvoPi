@@ -1,23 +1,40 @@
 # user_interface.py
 import pygame
+import pygame_gui
 
-def init_ui(leaderboard_font, info_font, screen_width, screen_height):
-    global LB_FONT, INFO_FONT, SCREEN_WIDTH, SCREEN_HEIGHT
-    LB_FONT = leaderboard_font
-    INFO_FONT = info_font
-    SCREEN_WIDTH = screen_width
-    SCREEN_HEIGHT = screen_height
+# Global UI manager and button reference
+UI_MANAGER = None
+VISION_BUTTON = None
 
-def draw_leaderboard(surface, organisms, current_season, current_day):
-    """Draws all UI elements with proper spacing"""
+def init_ui(screen_width, screen_height):
+    """Initialize UI elements with default fonts"""
+    global UI_MANAGER, VISION_BUTTON
+    
+    # Initialize UI manager with basic settings
+    UI_MANAGER = pygame_gui.UIManager(
+        (screen_width, screen_height),
+        theme_path='theme.json'  # Point to your theme file
+    )
+    
+    # Create vision button
+    VISION_BUTTON = pygame_gui.elements.UIButton(
+        relative_rect=pygame.Rect((10, screen_height - 50), (200, 40)),
+        text='Creature Vision: On',
+        manager=UI_MANAGER
+    )
+    
+    return UI_MANAGER, VISION_BUTTON
+
+def draw_leaderboard(surface, organisms, current_season, current_day, leaderboard_font, info_font):
+    """Draws leaderboard with custom fonts"""
     # Season/Day display
-    season_text = LB_FONT.render(f"Season {current_season} | Day {current_day}", True, (255,255,255))
+    season_text = leaderboard_font.render(f"Season {current_season} | Day {current_day}", True, (255,255,255))
     season_rect = season_text.get_rect(topleft=(10, 10))
     surface.blit(season_text, season_rect)
 
     # Leaderboard elements
-    lb_header = LB_FONT.render("Leaderboard (Top 3 Energy)", True, (255,255,255))
-    population_text = LB_FONT.render(f"Population: {len(organisms)}", True, (255,255,255))
+    lb_header = leaderboard_font.render("Leaderboard (Top 3 Energy)", True, (255,255,255))
+    population_text = leaderboard_font.render(f"Population: {len(organisms)}", True, (255,255,255))
     
     # Position elements with spacing
     y_offset = season_rect.bottom + 15
@@ -29,12 +46,12 @@ def draw_leaderboard(surface, organisms, current_season, current_day):
     # Top 3 organisms
     sorted_organisms = sorted(organisms, key=lambda org: org.energy, reverse=True)
     for i, org in enumerate(sorted_organisms[:3]):
-        entry_text = LB_FONT.render(f"{i+1}. {org.name}: {int(org.energy)}", True, (255,255,255))
+        entry_text = leaderboard_font.render(f"{i+1}. {org.name}: {int(org.energy)}", True, (255,255,255))
         surface.blit(entry_text, (10, y_offset))
         y_offset += entry_text.get_height() + 8
 
-def draw_organism_info(surface, organism):
-    """Draws organism stats panel with dynamic genetic traits"""
+def draw_organism_info(surface, organism, info_font, screen_width):
+    """Draws organism stats panel with custom info font"""
     if not organism:
         return
 
@@ -48,10 +65,9 @@ def draw_organism_info(surface, organism):
         f"🧬 Genome:"
     ]
 
-    # Dynamically add all genetic traits
+    # Dynamically add genetic traits
     for trait_name in sorted(organism.genome.genes.keys()):
         value = getattr(organism, trait_name)
-        # Smart formatting based on trait type
         if trait_name == 'lifespan':
             formatted = f"{int(value)}s"
         elif isinstance(value, float):
@@ -60,15 +76,13 @@ def draw_organism_info(surface, organism):
             formatted = f"{int(value)}"
         traits.append(f"  {trait_name.capitalize()}: {formatted}")
 
-    # Panel setup with dynamic sizing
+    # Panel setup
     padding = 10
-    line_height = INFO_FONT.get_height()
+    line_height = info_font.get_height()
     max_width = 250
     
-    # Calculate required width
-    max_text_width = max(INFO_FONT.size(trait)[0] for trait in traits)
-    panel_width = min(max(max_text_width + padding*2, 250), SCREEN_WIDTH//3)
-    
+    max_text_width = max(info_font.size(trait)[0] for trait in traits)
+    panel_width = min(max(max_text_width + padding*2, 250), screen_width//3)
     content_height = len(traits) * (line_height + 5) + padding * 2
     
     panel = pygame.Surface((panel_width, content_height), pygame.SRCALPHA)
@@ -78,32 +92,8 @@ def draw_organism_info(surface, organism):
     # Draw traits
     y_pos = padding
     for trait in traits:
-        text_surface = INFO_FONT.render(trait, True, (255,255,255))
+        text_surface = info_font.render(trait, True, (255,255,255))
         panel.blit(text_surface, (padding, y_pos))
         y_pos += line_height + 5
 
-    # Position panel
-    surface.blit(panel, (SCREEN_WIDTH - panel_width - 10, 10))
-class ToggleButton:
-    def __init__(self, x, y, width, height, text, font, initial_state=False):
-        self.rect = pygame.Rect(x, y, width, height)
-        self.text = text
-        self.font = font
-        self.state = initial_state
-        self.color = (100, 100, 100)  # Grey color for the button
-        self.text_color = (255, 255, 255)  # White color for the text
-
-    def draw(self, surface):
-        # Draw the button rectangle
-        pygame.draw.rect(surface, self.color, self.rect)
-        # Draw the button text
-        text_surface = self.font.render(self.text, True, self.text_color)
-        text_rect = text_surface.get_rect(center=self.rect.center)
-        surface.blit(text_surface, text_rect)
-
-    def is_clicked(self, mouse_pos):
-        return self.rect.collidepoint(mouse_pos)
-
-    def toggle(self):
-        self.state = not self.state
-        self.color = (0, 255, 0) if self.state else (100, 100, 100)  # Green when active, grey when inactive
+    surface.blit(panel, (screen_width - panel_width - 10, 10))
