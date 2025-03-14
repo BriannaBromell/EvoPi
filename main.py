@@ -8,40 +8,20 @@ https://www.reddit.com/r/pygame/comments/1112q10/pygame_community_edition_announ
 import json
 import math
 import pickle
+import queue 
 import asyncio
 import random
 import threading
 import numpy as np
 from pathlib import Path
 from collections import defaultdict
-
-#from concurrent.futures import ProcessPoolExecutor
 from concurrent.futures import ThreadPoolExecutor
-# --- Imports and/or Installs (external package dependencies) ---
-# Add additional modules by name to ensure_dependencies function call along with pygame-ce and requests
-from import_dependencies import ensure_dependencies
-try: #key: package name to install, value : package name to import
-    ensure_dependencies({
-        'pygame-ce': 'pygame', 
-        'pygame_gui': 'pygame_gui',
-        'requests': 'requests', 
-        'OpenGL': 'OpenGL', 
-        'json': 'json'
-        })
-    import pygame
-    import pygame_gui
-    import requests
-    import OpenGL
-    import json
-    print("All imports succeeded. Game can continue.")
-except ImportError as e:
-    print(f"Critical import error: {e}. Game cannot continue.")
-except Exception as e:
-    print(f"An unexpected error occurred: {e}")
-#import pygame, pygame_gui, requests, json
+
+import pygame
+import pygame_gui
+import OpenGL
 
 #--- Imports (Modular, local) ---
-import queue # Import queue for thread-safe communication
 import user_interface
 from game_gc import clean_game_state # garbage collection script
 from game_state import save_game_state, load_game_state #save and load functionality - uses data collection function save_current_state
