@@ -107,7 +107,7 @@ num_food = num_food_clumps * food_per_clump
 food_size = 5
 food_spawn_radius = min(screen_width, screen_height) * 0.8
 
-num_organisms = 20  # Initial organism count
+num_organisms = 10  # Initial organism count
 
 
 organism_size = 10
@@ -487,7 +487,7 @@ class Organism:
         except (FileNotFoundError, json.JSONDecodeError, OSError) as e: #add os error to catch permission errors.
             print(f"Error loading/creating syllables: {e}. Using default syllables.")
             return ["kra", "mor", "fin", "thor", "ly", "dra", "gla", "vis", "nox", "zen", "pyr", "thos", "rel", "vyn", "zyl", "quor", "myr", "jex", "fex", "wix", "lox", "rex", "vex", "zax", "plox", "trix"]  # Default syllables
-    def cast_rays_for_food_threaded(self, food_list_snapshot, organism_data):
+    '''def cast_rays_for_food_threaded(self, food_list_snapshot, organism_data):
         """Spatial grid-optimized food detection (5x faster)"""
         organism_pos = organism_data['position']
         organism_direction = organism_data['direction']
@@ -530,8 +530,49 @@ class Organism:
         if food_in_fov_indices.size > 0:
             for index in food_in_fov_indices:
                 detected_food.append({'food': food_list[index], 'distance': distances_to_food[index]}) # Store food object and distance
-        return detected_food # Return list of detected food
+        return detected_food # Return list of detected food'''
+    def cast_rays_for_food_threaded(self, food_list_snapshot, organism_data):
+        """Corrected vectorized ray casting with proper Pygame coordinate handling"""
+        organism_pos = organism_data['position']
+        organism_dir = organism_data['direction']
+        
+        # Get nearby food using spatial grid
+        nearby_food = food_grid.query_radius(organism_pos, self.sight_range)
+        
+        # Convert to set for O(1) lookups
+        snapshot_set = set(food_list_snapshot)
+        valid_food = [food for food in nearby_food if food in snapshot_set]
+        
+        if not valid_food:
+            return []
 
+        # Vectorize all position calculations
+        food_positions = np.array([f.position for f in valid_food])
+        org_x, org_y = organism_pos
+        
+        # Calculate directional vectors (PYGAME Y-AXIS FIX)
+        dx = food_positions[:, 0] - org_x
+        dy = org_y - food_positions[:, 1]  # Inverted for Pygame's coordinate system
+        
+        # Vectorized distance calculations
+        distances = np.hypot(dx, dy)
+        
+        # Correct angle calculation (0° = right, clockwise rotation)
+        angles_to_food = np.degrees(np.arctan2(dy, dx)) % 360
+        
+        # Angle difference calculation
+        angle_diffs = (angles_to_food - organism_dir) % 360
+        angle_differences = np.minimum(angle_diffs, 360 - angle_diffs)
+        
+        # Create combined mask
+        fov_mask = (distances <= self.sight_range) & (angle_differences <= self.sight_fov / 2)
+        
+        # Get sorted results by distance
+        detected_indices = np.argsort(distances[fov_mask])
+        detected_distances = distances[fov_mask][detected_indices]
+        detected_food_objects = [valid_food[i] for i in np.where(fov_mask)[0][detected_indices]]
+        
+        return [{'food': f, 'distance': d} for f, d in zip(detected_food_objects, detected_distances)]
 
     def cast_rays_for_mate_threaded(self, organisms, organism_data):
         """Casts rays to detect mates within FOV and range and returns all in FOV with distances."""
@@ -1164,6 +1205,7 @@ if __name__ == '__main__':
 
     # Spatial partitioning systems
     food_grid = SpatialGrid(cell_size=150)  # Optimized food queries
+
     organism_grid = SpatialGrid(cell_size=200)  # Optimized organism queries
 
     # ==== Phase 2 - Game State Loading ====
@@ -1204,9 +1246,9 @@ if __name__ == '__main__':
         # ==== Phase 4.1 - Spatial System Update ====
         # Update spatial partitioning grids
         # ==========================================
+
         food_grid.update(food_list)
         organism_grid.update(organisms)
-
         # ==== Phase 4.2 - Memory Management ====
         # Perform garbage collection at intervals
         # =======================================
@@ -1383,10 +1425,10 @@ if __name__ == '__main__':
     # Shutdown systems and release resources
     # ======================================
     print("Game loop ended, cleaning up...")
-    ray_cast_executor.shutdown(wait=False)
+    ray_cast_executor.shutdown(wait=True, cancel_futures=True) 
     graphics_renderer.cleanup()
     if Food._matrix_pool is not None:
-        Food._matrix_pool.shutdown(wait=False)
-
+        Food._matrix_pool.shutdown(wait=True, cancel_futures=True) 
+    pygame.font.quit()
     pygame.quit()
     print("Game exited successfully.")
