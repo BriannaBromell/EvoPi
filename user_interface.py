@@ -25,10 +25,10 @@ def init_ui(screen_width, screen_height):
     
     return UI_MANAGER, VISION_BUTTON
 
-def draw_leaderboard(surface, organisms, current_season, current_day, leaderboard_font, info_font):
+def draw_leaderboard(surface, organisms, current_season, current_day, current_year, leaderboard_font, info_font):
     """Draws leaderboard with custom fonts"""
     # Season/Day display
-    season_text = leaderboard_font.render(f"Season {current_season} | Day {current_day}", True, (255,255,255))
+    season_text = leaderboard_font.render(f"Day {current_day} | Season {current_season} | Year {current_year}", True, (255,255,255))
     season_rect = season_text.get_rect(topleft=(10, 10))
     surface.blit(season_text, season_rect)
 

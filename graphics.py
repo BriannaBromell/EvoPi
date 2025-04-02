@@ -1,6 +1,7 @@
 import pygame
 from OpenGL.GL import *
 
+
 class GraphicsRenderer:
     def __init__(self, screen_width, screen_height):
         self.screen_width = screen_width

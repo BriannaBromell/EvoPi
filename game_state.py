@@ -17,7 +17,7 @@ def save_game_state(game_data, filename="game_state.pkl"):
         
         # Save pickle data
         with open(saved_dir / filename, "wb") as f:
-            pickle.dump(game_data, f)
+            pickle.dump(game_data, f, protocol=4)# Use protocol 4 for better numpy array handling
             
         print(f"Game state saved to {saved_dir/filename}")
         return True
